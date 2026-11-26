@@ -234,7 +234,8 @@ struct DetailColumn: View {
                         preselection: uninstallPreselection,
                         onPreselectionUsed: { uninstallPreselection = nil },
                         duplicateBundleIdentifier: duplicateReviewBundleIdentifier,
-                        onEndDuplicateReview: { duplicateReviewBundleIdentifier = nil }
+                        onEndDuplicateReview: { duplicateReviewBundleIdentifier = nil },
+                        onReviewPreselectedCopies: { duplicateReviewBundleIdentifier = $0 }
                     )
                 case .cleanup:
                     CleanupView(
@@ -262,7 +263,11 @@ struct DetailColumn: View {
                 case .migration:
                     MigrationView(onWegaState: { wegaState = $0 }, onNavigate: navigate(fromBanner:))
                 case .inventory:
-                    InventoryView(onWegaState: { wegaState = $0 }, onNavigate: onNavigate)
+                    InventoryView(onWegaState: { wegaState = $0 }, onNavigate: onNavigate, onReviewUninstall: { path, group in
+                        uninstallPreselection = path
+                        duplicateReviewBundleIdentifier = group
+                        onNavigate(.uninstall)
+                    })
                 case .rollback:
                     RollbackView(onNavigate: navigate(fromBanner:))
                 case .logs:

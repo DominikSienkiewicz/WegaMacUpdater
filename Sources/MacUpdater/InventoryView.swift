@@ -12,6 +12,7 @@ struct InventoryView: View {
     var onWegaState: ((WegaState) -> Void)?
     /// „Sprawdź aktualizacje” takes the user to Updates, where the scan shows and can be stopped.
     var onNavigate: ((SidebarSelection) -> Void)?
+    var onReviewUninstall: ((URL, String?) -> Void)?
 
     @EnvironmentObject private var model: AppViewModel
     @EnvironmentObject private var scanStore: ScanStore
@@ -20,6 +21,7 @@ struct InventoryView: View {
     @ObservedObject private var menuBar = MenuBarAgent.shared
     @ObservedObject private var policies = UpdatePolicyStore.shared
     @State private var needsCheckingOnly = false
+    @State private var largeUnusedOnly = false
 
     @EnvironmentObject private var inventory: InventoryStore
     /// The „dziś”/„wczoraj” of „Odczytano …” moves at midnight, after wake and on a clock change.
@@ -116,7 +118,13 @@ struct InventoryView: View {
 
     private func content(now: Date) -> some View {
         let checks = checksByPath
-        let rows = filtered.filter { !needsCheckingOnly || presentation(for: $0, checks: checks, now: now).needsAttention }
+        let duplicates = ambiguousBundleIds
+        let rows = filtered.filter { app in
+            let needsChecking = !needsCheckingOnly || presentation(for: app, checks: checks, now: now).needsAttention
+            return needsChecking && (!largeUnusedOnly || inventory.activity[app.installation]?.isLargeAndUnused(
+                bytes: currentFootprints[app.installation]?.totalBytes, now: now
+            ) == true)
+        }
         return VStack(spacing: 0) {
             // Stat cards
             HStack(spacing: 10) {
@@ -132,35 +140,16 @@ struct InventoryView: View {
             .padding(.top, 16)
             .padding(.bottom, 10)
 
-            // Toolbar
-            HStack(spacing: 10) {
-                FilterPills(selection: $filter)
-                Toggle(tr("Wymaga sprawdzenia"), isOn: $needsCheckingOnly)
-                    .toggleStyle(.button)
-                    .controlSize(.small)
+            filterToolbar(rowCount: rows.count)
 
-                Spacer()
-
-                Text(trf("%@ z %@", "\(rows.count)", "\(apps.count)"))
-                    .font(.wega(.subheadline))
-                    .foregroundStyle(.tertiary)
-
-                // UX-11f — the whole inventory (not the filtered view) exported as a
-                // `brew bundle` manifest or a CSV.
-                Menu {
-                    Button { export(.brewfile) } label: { Label("Brewfile…", systemImage: "mug") }
-                    Button { export(.csv) } label: { Label(tr("Inwentarz (CSV)…"), systemImage: "tablecells") }
-                } label: {
-                    Label(tr("Eksportuj"), systemImage: "square.and.arrow.up")
-                }
-                .menuStyle(.button)
-                .controlSize(.small)
-                .fixedSize()
-                .disabled(isScanning || (apps.isEmpty && npmGlobals.isEmpty))
-                .help(tr("Zapisz spis aplikacji jako Brewfile lub CSV"))
+            if largeUnusedOnly {
+                Text(tr("Ponad 1 GB i co najmniej 90 dni od ostatniego otwarcia według Spotlight."))
+                    .font(.wega(.footnote))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 10)
 
             // The read time and the two scan buttons get a line of their own: beside the filters
             // they would not fit the 740 pt detail column at the window's minimum width.
@@ -255,6 +244,10 @@ struct InventoryView: View {
                         .padding(.vertical, 12)
                         Spacer()
                     }
+                } else if largeUnusedOnly && !apps.isEmpty && measuredRead != inventory.lastReadAt {
+                    ProgressView(tr("Obliczanie rozmiarów aplikacji"))
+                        .padding()
+                        .frame(maxWidth: .infinity)
                 } else if let empty = InventoryEmptyState.of(
                     appCount: apps.count, rowCount: rows.count, isScanning: isScanning,
                     hasError: errorMessage != nil, lastReadAt: inventory.lastReadAt
@@ -268,7 +261,12 @@ struct InventoryView: View {
                                     app: app,
                                     isAlt: i % 2 == 1,
                                     footprint: currentFootprints[app.installation],
-                                    showsLocation: app.bundleIdentifier.map(ambiguousBundleIds.contains) ?? false,
+                                    showsLocation: app.bundleIdentifier.map(duplicates.contains) ?? false,
+                                    activity: inventory.activity[app.installation],
+                                    reviewUninstall: largeUnusedOnly && onReviewUninstall != nil ? { path in
+                                        let group = app.bundleIdentifier.flatMap { duplicates.contains($0) ? $0 : nil }
+                                        onReviewUninstall?(path, group)
+                                    } : nil,
                                     checkPresentation: presentation(for: app, checks: checks, now: now)
                                 )
                                 Divider().opacity(0.3)
@@ -281,7 +279,7 @@ struct InventoryView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 16)
 
-            if !npmGlobals.isEmpty {
+            if !npmGlobals.isEmpty && !largeUnusedOnly {
                 NpmGlobalsList(packages: npmGlobals)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 16)
@@ -297,6 +295,52 @@ struct InventoryView: View {
         .task { scanStore.restoreLastScan(); if inventory.needsRead(given: changes) { await scan() } }
     }
 
+    private func filterToolbar(rowCount: Int) -> some View {
+        HStack(spacing: 10) {
+            FilterPills(selection: $filter)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 6) { additionalFilters }
+                    .toggleStyle(.button)
+                    .fixedSize()
+                Menu {
+                    additionalFilters
+                } label: {
+                    Label(tr("Filtry aplikacji"), systemImage: needsCheckingOnly || largeUnusedOnly
+                          ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                }
+            }
+            .controlSize(.small)
+            .frame(idealWidth: 150, alignment: .leading)
+
+            Spacer()
+
+            Text(trf("%@ z %@", "\(rowCount)", "\(apps.count)"))
+                .font(.wega(.subheadline))
+                .foregroundStyle(.tertiary)
+
+            // UX-11f — the whole inventory (not the filtered view) exported as a
+            // `brew bundle` manifest or a CSV.
+            Menu {
+                Button { export(.brewfile) } label: { Label("Brewfile…", systemImage: "mug") }
+                Button { export(.csv) } label: { Label(tr("Inwentarz (CSV)…"), systemImage: "tablecells") }
+            } label: {
+                Label(tr("Eksportuj"), systemImage: "square.and.arrow.up")
+            }
+            .menuStyle(.button)
+            .controlSize(.small)
+            .fixedSize()
+            .disabled(isScanning || (apps.isEmpty && npmGlobals.isEmpty))
+            .help(tr("Zapisz spis aplikacji jako Brewfile lub CSV"))
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 10)
+    }
+
+    @ViewBuilder private var additionalFilters: some View {
+        Toggle(tr("Wymaga sprawdzenia"), isOn: $needsCheckingOnly)
+        Toggle(tr("Duże i dawno nieotwierane"), isOn: $largeUnusedOnly)
+    }
+
     private func emptyState(_ state: InventoryEmptyState) -> some View {
         VStack(spacing: 12) {
             WegaFull(pose: state == .noMatches ? .sniff : .idle, size: 100)
@@ -308,6 +352,7 @@ struct InventoryView: View {
                     filter = .all
                     search = ""
                     needsCheckingOnly = false
+                    largeUnusedOnly = false
                 }
                 .controlSize(.small)
             }
@@ -546,6 +591,8 @@ private struct InventoryRow: View {
     /// REL-16: only shown for an app installed in more than one place — an
     /// unambiguous row doesn't need its folder spelled out.
     var showsLocation: Bool = false
+    let activity: InventoryAppActivity?
+    let reviewUninstall: ((URL) -> Void)?
     var checkPresentation: InventoryCheckPresentation?
 
     @State private var hovered = false
@@ -569,12 +616,31 @@ private struct InventoryRow: View {
                     Text(app.name)
                         .font(.wega(.callout, weight: .medium))
                         .lineLimit(1)
+                    let opened = activity?.lastOpenedAt.map { trf("Otwarto %@", $0.formatted(date: .numeric, time: .omitted)) }
+                        ?? tr("Brak danych o otwarciu")
+                    Text(opened)
+                        .font(.wega(.footnote))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .help(opened)
                     if showsLocation {
                         Text(app.locationLabel)
                             .font(.wega(.footnote, monospaced: true))
                             .foregroundStyle(.tertiary)
                             .lineLimit(1)
                             .truncationMode(.middle)
+                    }
+                    if let reviewUninstall, let activity {
+                        if let path = activity.uninstallReviewTarget(for: app) {
+                            Button(tr("Odinstaluj…")) { reviewUninstall(path) }
+                                .buttonStyle(.link)
+                                .font(.wega(.footnote))
+                                .accessibilityLabel(trf("Przejrzyj odinstalowanie %@", app.name))
+                        } else if let protection = activity.protection {
+                            Image(systemName: "lock")
+                                .accessibilityLabel(UninstallProtectionPresentation.protectionReason(protection))
+                                .help(UninstallProtectionPresentation.protectionReason(protection))
+                        }
                     }
                 }
             }

@@ -37,6 +37,13 @@ enum UninstallSelection {
         return Set(selectable(apps, protections: protections).filter { $0.path.standardizedFileURL.path == path }.map(\.id))
     }
 
+    static func duplicateGroup(for bundle: URL, in apps: [ApplicationInfo]) -> String? {
+        let identity = InstallationIdentity(path: bundle)
+        guard let id = apps.first(where: { $0.installation == identity })?.bundleIdentifier,
+              InstallationInventory.ambiguousBundleIdentifiers(apps).contains(id) else { return nil }
+        return id
+    }
+
     static func selectAllSymbol(
         filtered: [ApplicationInfo],
         selected: Set<String>,

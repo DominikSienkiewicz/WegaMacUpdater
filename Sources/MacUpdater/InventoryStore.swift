@@ -14,11 +14,13 @@ struct InventorySources {
     ) throws -> [ApplicationInfo]
     let masList: () async throws -> [MasInstalledApp]
     let npmGlobals: () async throws -> [NpmGlobalPackage]
+    var readActivity: ([ApplicationInfo]) -> [InstallationIdentity: InventoryAppActivity] = { _ in [:] }
 }
 
 struct InventorySnapshot: Equatable, Sendable {
     let apps: [ApplicationInfo]
     let npmGlobals: [NpmGlobalPackage]
+    let activity: [InstallationIdentity: InventoryAppActivity]
     /// REL-14: sources that failed during the scan. Empty means the scan was clean;
     /// a non-empty value means the table is partial and the store raises the banner.
     let failures: [ScanSourceFailure]
@@ -26,11 +28,13 @@ struct InventorySnapshot: Equatable, Sendable {
     init(
         apps: [ApplicationInfo],
         npmGlobals: [NpmGlobalPackage],
-        failures: [ScanSourceFailure] = []
+        failures: [ScanSourceFailure] = [],
+        activity: [InstallationIdentity: InventoryAppActivity] = [:]
     ) {
         self.apps = apps
         self.npmGlobals = npmGlobals
         self.failures = failures
+        self.activity = activity
     }
 
     /// REL-14: runs every inventory source, recording a `ScanSourceFailure` for each one
@@ -100,7 +104,7 @@ struct InventorySnapshot: Equatable, Sendable {
         }
         catch { failures.append(ScanSourceFailure(source: .npm, message: error.localizedDescription)) }
 
-        return InventorySnapshot(apps: apps, npmGlobals: npmPackages, failures: failures)
+        return InventorySnapshot(apps: apps, npmGlobals: npmPackages, failures: failures, activity: sources.readActivity(apps))
     }
 }
 
@@ -139,7 +143,10 @@ struct LiveInventorySnapshotLoader: InventorySnapshotLoading {
                     )
                 },
                 masList: { try await masService.list() },
-                npmGlobals: { try await npmService.installedGlobals() }
+                npmGlobals: { try await npmService.installedGlobals() },
+                readActivity: { apps in
+                    InventoryAppActivity.read(apps: apps, protections: UninstallEligibility.protections(for: apps))
+                }
             )
         )
     }
@@ -179,6 +186,7 @@ extension InventoryChangeStamp {
 final class InventoryStore: ObservableObject {
     @Published private(set) var apps: [ApplicationInfo] = []
     @Published private(set) var npmGlobals: [NpmGlobalPackage] = []
+    @Published private(set) var activity: [InstallationIdentity: InventoryAppActivity] = [:]
     @Published private(set) var isScanning = false
     @Published private(set) var errorMessage: String?
 
@@ -247,6 +255,7 @@ final class InventoryStore: ObservableObject {
             }
             apps = snapshot.apps
             npmGlobals = snapshot.npmGlobals
+            activity = snapshot.activity
             errorMessage = snapshot.failures.scanErrorMessage
             changesAtLastRead = changes
             lastReadAt = now()
