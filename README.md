@@ -294,6 +294,8 @@ Microsoft AutoUpdate share one list, with npm globals as a third package manager
 Package-manager actions expose their commands in a dry-run panel; supported cask replacements
 can restore the previous bundle when replacement fails. You can add eligible Homebrew repairs
 and app takeovers individually to the same queue and review them before starting the run.
+When a Homebrew update needs more disk space, Wega shows the shortfall and opens Cleanup
+on request. **Back to Updates** returns to the previous list so you can retry the queue.
 Vendor handoffs open the owning updater. Details in
 [Features](docs/features.md).
 

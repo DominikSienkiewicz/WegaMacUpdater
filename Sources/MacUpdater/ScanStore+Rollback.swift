@@ -36,8 +36,7 @@ extension ScanStore {
             }
             brewLog.append(reason.logLine)
             WegaLog.info(.homebrew, "Aktualizacja z okna odroczona — \(reason.localizedMessage)")
-            showBanner(BannerData(variant: .danger, title: tr("Odkładam pobieranie"),
-                                  message: reason.localizedMessage, action: .openLogs))
+            showBanner(reason.updateBanner)
             emitActivitySignal(.error)
             emitWegaState(WegaState(pose: .alert, line: tr("Warunki nie pozwalają teraz bezpiecznie pobrać aktualizacji.")))
             return .blocked(publisherVetoes: [:])

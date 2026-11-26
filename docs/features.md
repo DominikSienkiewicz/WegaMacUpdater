@@ -608,6 +608,11 @@ just because the items that did report all passed.
 
 #### Error banners say what to do next
 
+A foreground cask update blocked by the disk check shows the estimated additional space
+needed. **Review Cleanup** opens Cleanup and **Back to Updates** restores the previous
+update filter. A retry checks capacity again. If a mixed run already updated some apps,
+only still-offered replacements held for insufficient space stay selected.
+
 On Updates, during an update run and on Undo updates, every error banner carries a button. Most
 are **Show in Logs**, which opens Logs on the entry that explains the failure; a failure of macOS permission leads with the permission, offers
 **Open privacy settings** and never points at Logs, and a developer-signature change offers

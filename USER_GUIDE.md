@@ -585,6 +585,11 @@ opens this guide.
 
 ### When something fails
 
+If an update reports insufficient disk space, **Review Cleanup** opens **Cleanup**.
+Use **Scan** to find candidates and review what you want to remove. Moving files to the
+Trash frees space only once you empty it. **Back to Updates** restores your previous
+category. Start the queued updates again to check the available space and continue.
+
 On **Updates**, during an update run and on **Undo updates**, every error banner says what to do
 next and has a button for it. Most of them are **Show in Logs**, which opens **Logs** with the
 entry that explains the failure; a permission

@@ -42,6 +42,46 @@ struct WindowRunResourceDecisionTests {
         #expect(runner.upgraded(token))
     }
 
+    @Test func lowDiskOffersCleanupWithTheShortfallAndKeepsTheQueueForRetry() async throws {
+        let token = "space-\(UUID().uuidString)"
+        defer {
+            for operation in UpdateOperationStore.shared.operations() where operation.items.contains(where: { $0.token == token }) {
+                UpdateOperationStore.shared.removeOperation(id: operation.id)
+            }
+        }
+        let key = UpdatePlanner.key(name: token, kind: .cask)
+        let asked = AskedTokens()
+        let (harness, runner) = Self.harness(token) { _, _, _ in
+            asked.tokens.append(token)
+            return asked.tokens.count == 1
+                ? .postpone(reason: .insufficientDisk(required: 5_000_000_000, available: 2_000_000_000))
+                : .allow
+        }
+        harness.store.selected = [key]
+
+        await harness.store.runUpdate(targetKeys: [key])
+
+        let banner = try #require(harness.store.banner)
+        #expect(banner.action == .openCleanup)
+        let shortfall = ByteCountFormatter.string(fromByteCount: 3_000_000_000, countStyle: .file)
+        #expect(banner.message.contains(shortfall))
+        #expect(harness.store.selected == [key])
+        #expect(!runner.upgraded(token))
+
+        await harness.store.runUpdate(targetKeys: harness.store.selected)
+        #expect(asked.tokens == [token, token])
+        #expect(runner.upgraded(token))
+        #expect(harness.store.banner?.action != .openCleanup)
+    }
+
+    @Test(arguments: [PostponeReason.diskSpaceUnknown, .meteredNetwork, .lowBattery])
+    func otherResourceProblemsKeepTheDiagnosticsAction(_ reason: PostponeReason) async {
+        let token = "conditions-\(UUID().uuidString)"
+        let (harness, _) = Self.harness(token) { _, _, _ in .postpone(reason: reason) }
+        await harness.store.runUpdate(targetKeys: [UpdatePlanner.key(name: token, kind: .cask)])
+        #expect(harness.store.banner?.action == .openLogs)
+    }
+
     /// The app's store keeps the live gate: network, battery, heat and disk. Only a store that
     /// says otherwise, a test's, skips it.
     @Test func theAppsStoreAsksTheLivePreflight() throws {
