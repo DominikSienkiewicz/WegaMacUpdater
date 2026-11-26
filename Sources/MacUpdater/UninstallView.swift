@@ -521,7 +521,7 @@ struct UninstallView: View {
         if let duplicateBundleIdentifier {
             duplicateReview = scan.copies.review(for: duplicateBundleIdentifier)
         } else if let preselection, let onReviewPreselectedCopies,
-                  let id = UninstallSelection.duplicateGroup(for: preselection, in: apps) {
+                  let id = scan.copies.duplicateGroup(for: preselection) {
             onReviewPreselectedCopies(id)
             return
         }
