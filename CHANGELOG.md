@@ -21,6 +21,10 @@ them verbatim under the new version heading, so that step is never done by hand 
   to measure, then click a result to see what contributes to it.
 - Cleanup can review old `.dmg` and `.pkg` installers in a chosen folder and show
   Xcode build data by project, with release archives listed separately.
+- Updates blocked by low disk space can recheck the update volume from Cleanup.
+- Inventory shows size changes for the app, cache and support files between measurements.
+  A new filter helps review large installations last opened at least 90 days ago.
+- Xcode cleanup lists installed simulator runtimes and opens Xcode to manage components.
 
 ## [0.10.1] — 2026-11-25
 

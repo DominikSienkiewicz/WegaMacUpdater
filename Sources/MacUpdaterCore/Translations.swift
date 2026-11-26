@@ -21,6 +21,9 @@ public enum Translations {
         .merging(cleanup.merging(cleanupHygiene) { first, _ in first }) { first, _ in first }
         .merging(cleanupFileReview) { first, _ in first }
         .merging(inventoryGrowth) { first, _ in first }
+        .merging(cleanupSpaceRecheck) { first, _ in first }
+        .merging(largeUnusedApps) { first, _ in first }
+        .merging(simulatorRuntimes) { first, _ in first }
         .merging(MicrosoftAutoUpdateTranslations.english) { first, _ in first }
         .merging(uninstallTexts) { first, _ in first }
         .merging(updatesActionBar.merging(uxReview) { first, _ in first }) { first, _ in first }
