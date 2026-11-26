@@ -311,6 +311,10 @@ JDKs remain in the scan report even when their source is unknown or Homebrew alr
 lists their update. These reporting associations do not extend app-bundle rollback to
 installer packages or Java runtimes.
 
+Cleanup offers two on-demand file reviews. **Old installers** finds `.dmg` and `.pkg`
+files in a folder you choose. **Xcode cleanup** lists each project's build data and
+shows release archives separately. Both views display file sizes and modification dates.
+
 Cleanup lists distinct copies of an application by bundle identifier, path, and version.
 From there you can review the copies and choose one to uninstall with its shared app data
 preserved. Links to an existing copy count as part of that installation.

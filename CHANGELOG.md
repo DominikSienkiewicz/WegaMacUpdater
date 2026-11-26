@@ -19,6 +19,8 @@ them verbatim under the new version heading, so that step is never done by hand 
   offers **Review Cleanup**, with a way back to the queued updates.
 - Inventory can sort installed applications by estimated disk usage. Select **Size**
   to measure, then click a result to see what contributes to it.
+- Cleanup can review old `.dmg` and `.pkg` installers in a chosen folder and show
+  Xcode build data by project, with release archives listed separately.
 
 ## [0.10.1] — 2026-11-25
 
