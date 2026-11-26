@@ -39,6 +39,15 @@ struct UninstallProtectedRowsTests {
         #expect(basket.map(\.id) == [zoom.id, slack.id])
     }
 
+    @Test func aPartialRefreshKeepsMissingSelectionsWithoutArmingAnAbsentTarget() {
+        let first = app("Slack"), missing = app("Zoom")
+        let selected: Set<String> = [first.id, missing.id]
+        let partial = UninstallSelection.afterRefresh(selected, apps: [first], protections: [:], scanComplete: false)
+        #expect(partial == selected)
+        #expect(UninstallSelection.targets(filtered: [first], selected: partial, protections: [:]).map(\.id) == [first.id])
+        #expect(UninstallSelection.afterRefresh(partial, apps: [first], protections: [:], scanComplete: true) == [first.id])
+    }
+
     @Test func selectAllSkipsProtectedRows() {
         let apps = [app("Alpha"), app("Safari"), app("Gamma")]
         let protections = [apps[1].id: UninstallProtection.systemApplication]

@@ -18,6 +18,13 @@ enum UninstallSelection {
         Set(selectable(filtered, protections: protections).map(\.id))
     }
 
+    static func afterRefresh(
+        _ selected: Set<String>, apps: [ApplicationInfo], protections: [String: UninstallProtection], scanComplete: Bool
+    ) -> Set<String> {
+        guard scanComplete else { return selected }
+        return selected.intersection(selectAll(filtered: apps, protections: protections))
+    }
+
     static func togglingVisible(
         _ apps: [ApplicationInfo], in selected: Set<String>, protections: [String: UninstallProtection]
     ) -> Set<String> {

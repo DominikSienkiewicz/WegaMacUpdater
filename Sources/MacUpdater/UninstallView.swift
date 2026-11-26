@@ -515,13 +515,15 @@ struct UninstallView: View {
         protections = scan.protections
         copyInventory = scan.copies
         if let duplicateBundleIdentifier {
-            applyDuplicateReview(duplicateBundleIdentifier, to: scan)
+            duplicateReview = scan.copies.review(for: duplicateBundleIdentifier)
         } else if let preselection, let onReviewPreselectedCopies,
                   let id = UninstallSelection.duplicateGroup(for: preselection, in: apps) {
             onReviewPreselectedCopies(id)
             return
         }
-        selected.formIntersection(UninstallSelection.selectAll(filtered: appRows, protections: protections))
+        selected = UninstallSelection.afterRefresh(
+            selected, apps: appRows, protections: protections, scanComplete: !scan.scanFailed
+        )
         if let preselection {
             selected = UninstallSelection.preselection(for: preselection, in: appRows, protections: protections)
             onPreselectionUsed()
@@ -529,11 +531,6 @@ struct UninstallView: View {
         scanFailed = scan.scanFailed
         applicationsSourceFailed = scan.failures.contains { $0.source == .applications }
         scanError = scan.failures.scanErrorMessage
-    }
-
-    private func applyDuplicateReview(_ bundleIdentifier: String, to scan: UninstallScan) {
-        duplicateReview = scan.copies.review(for: bundleIdentifier)
-        selected.formIntersection(appRows.filter { protections[$0.id] == nil }.map(\.id))
     }
 
     /// - Parameter reported: every confirmed target, in confirmation order; each one ends in
