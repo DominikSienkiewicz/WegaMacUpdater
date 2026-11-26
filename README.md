@@ -323,7 +323,11 @@ installation and opens Xcode for component management.
 
 Cleanup lists distinct copies of an application by bundle identifier, path, and version.
 From there you can review the copies and choose one to uninstall with its shared app data
-preserved. Links to an existing copy count as part of that installation.
+preserved. Links to an existing copy count as part of that installation. The same
+copy check applies in **Uninstall**. Build a selection across searches and review the
+chosen installations before confirming. Wega keeps local profiles and settings by
+default. The file report shows what reached the Trash, what was already absent and
+what stayed on disk.
 
 In Inventory, click **Size** to measure and sort installations from largest to smallest.
 Click a result for the bundle, cache and application support breakdown. **Change since

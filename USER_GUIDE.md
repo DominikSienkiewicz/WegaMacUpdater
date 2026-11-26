@@ -1265,30 +1265,33 @@ step or opens **Uninstall apps** with an app selected, shows no such line.
 
 ### Uninstalling apps
 
-The **Uninstall** screen removes any app regardless of origin (casks via `brew uninstall
---cask`; App Store and manual apps to the Trash). The confirmation dialog defaults to the
-safe **"App only"**; the irreversible **"App + leftovers"** (which also deletes
-preferences, caches and Application Support) is never pre-selected. If a scan couldn't read
-a source, the dialog warns that the target list may be incomplete before anything is
-removed. **Right-click any app in the list** to show it in Finder, copy its path, or toggle
-whether it's marked for removal.
+In **Uninstall**, search for an app and tick its row. You can search again and add more
+apps. **Selected** shows the whole selection and lets you remove individual entries.
+**Select visible** applies to the current results. Right-click a row to show it in
+Finder, copy its path or change its selection.
 
-For apps Homebrew doesn't manage, the dialog also lists **App leftovers** found in your home
-folder: items Homebrew's zap list for the app's cask names, items stored under the app's
-bundle identifier, and folders named after the app. Bundle-identifier items are ticked, and
-so are Homebrew-list items when the app clearly matches that cask, the item is inside
-`~/Library` and the item's name points to the app (its bundle identifier, its name or its
-cask's name). A folder the list names for a whole vendor or for several apps (Microsoft's
-folder for Word, Google's updater for Chrome) is marked "Homebrew list (shared folder?)" and
-stays unticked, as do items from a cask matched only by name, anything outside `~/Library`
-and folders found only by name; they are listed under **Probable — check before ticking**.
-An item that another installed app still uses is shown unticked and marked "also used by",
-and an item shared by two apps you remove together goes only when both are removed.
-**Select all** ticks the main list only; **Deselect all** clears the whole list, probable
-items included. Sizes appear a moment after the dialog opens (items in Containers and Group
-Containers show "size unknown"). If the app list couldn't be read completely, nothing is
-ticked by default. Ticked items go to the Trash, never a permanent delete; system-wide
-folders are not touched.
+When several copies of an app are installed, review the full paths to see which one
+will be removed and which will stay. Choose one copy per app in a batch. Wega checks
+the selected installation and the surviving copy before removal and keeps their shared
+data. If Wega cannot establish which copy Homebrew owns, it leaves the affected app
+in place. If reading the installed Homebrew packages fails, refresh the inventory
+before removing an app whose source is unknown.
+
+Homebrew removes its own packages. App Store and manually installed apps go to the
+Trash. The confirmation lists the target installations and the scope of your choices.
+Homebrew's optional permanent cleanup applies to the eligible packages named in its
+section.
+
+For other apps, Wega starts with all local files unticked. Select caches and logs
+if you want to clear temporary data. Profiles, preferences, containers and items
+with uncertain ownership require individual selection. Shared items identify other
+apps that use them. When two selected apps share an item, Wega moves it to the Trash
+only after both apps were removed. You can inspect the paths and sizes before
+confirming. Sizes for container folders may be unavailable.
+
+Expand the file results after removal to see which items reached the Trash, which
+were already absent and which stayed on disk. Open the Trash to inspect items Wega
+moved there, or show a remaining item in Finder and read why it stayed.
 
 An app owned by root, which the Trash will not take without a password, is removed by the
 **Wega helper** when it is switched on (the row says so: it will be moved to the Trash without
