@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import XCTest
 @testable import MacUpdaterCore
@@ -6,6 +7,19 @@ import XCTest
 final class OldInstallerScannerTests: XCTestCase {
     let now = Date(timeIntervalSince1970: 1_750_000_000)
     let days30: TimeInterval = 30 * 24 * 60 * 60
+
+    func testOnlyLocallyPresentRegularFilesCanBeReviewedOrTrashed() {
+        var status = stat()
+        status.st_mode = S_IFREG
+        XCTAssertNotNil(OldInstallerFingerprint(status))
+        status.st_flags = UInt32(UF_HIDDEN)
+        XCTAssertNotNil(OldInstallerFingerprint(status))
+        status.st_flags |= UInt32(SF_DATALESS)
+        XCTAssertNil(OldInstallerFingerprint(status), "A cloud placeholder must be skipped even if its logical size is known.")
+        status.st_flags = 0
+        status.st_mode = S_IFLNK
+        XCTAssertNil(OldInstallerFingerprint(status))
+    }
 
     @discardableResult
     private func file(_ name: String, in home: CleanupTempHome, age: TimeInterval = 31 * 86400) throws -> URL {
