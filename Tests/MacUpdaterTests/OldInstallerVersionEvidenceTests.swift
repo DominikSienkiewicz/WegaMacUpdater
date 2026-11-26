@@ -42,6 +42,23 @@ final class OldInstallerVersionEvidenceTests: XCTestCase {
         XCTAssertNil(version(xml()))
     }
 
+    func testDeclaredBuildMustAlsoMatchWhenShortVersionsAreEqual() throws {
+        let home = try CleanupTempHome()
+        let root = try home.directory("Applications")
+        try home.directory("Applications/Fixture.app/Contents")
+        let path = home.url("Applications/Fixture.app/Contents/Info.plist")
+        let plist = ["CFBundleIdentifier": "test.fixture", "CFBundleShortVersionString": "2.1", "CFBundleVersion": "101"]
+        try PropertyListSerialization.data(fromPropertyList: plist, format: .binary, options: 0).write(to: path)
+        func version(build: String?) -> String? {
+            let metadata = build.map { xml().replacingOccurrences(of: "CFBundleShortVersionString=", with: "CFBundleVersion=\"\($0)\" CFBundleShortVersionString=") } ?? xml()
+            return OldInstallerVersionEvidence.confirmedVersion(packageInfo: metadata, packageTeam: "ABCDEFGHIJ",
+                applications: root, matchesPublisher: { _, _, _ in true })
+        }
+        XCTAssertNil(version(build: "102"))
+        XCTAssertEqual(version(build: "101"), "2.1")
+        XCTAssertEqual(version(build: nil), "2.1")
+    }
+
     @MainActor func testOnlyPackageInfoIsReadFromSyntheticFlatPackage() async throws {
         let home = try CleanupTempHome()
         try home.file("PackageInfo", text: xml())

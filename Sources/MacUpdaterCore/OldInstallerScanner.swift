@@ -54,7 +54,7 @@ public actor OldInstallerScanner {
             guard Self.supports(name), let fingerprint = folder.regularFile(named: name),
                   age.includes(fingerprint.modifiedAt, now: referenceDate) else { return }
             var version: String?
-            if !fingerprint.isDataless, ContinuousClock.now < evidenceDeadline, (name as NSString).pathExtension.lowercased() == "pkg" {
+            if ContinuousClock.now < evidenceDeadline, (name as NSString).pathExtension.lowercased() == "pkg" {
                 version = folder.withPinnedPackage(name: name, matching: fingerprint, read: installedVersion)
             }
             installers.append(OldInstaller(
@@ -96,23 +96,22 @@ public actor OldInstallerScanner {
     }
 }
 
-private struct OldInstallerFingerprint: Sendable, Equatable {
+struct OldInstallerFingerprint: Sendable, Equatable {
     let identity: CleanupFileIdentity
     let size: Int64
     let modifiedSeconds: Int
     let modifiedNanos: Int
     let createdSeconds: Int
     let createdNanos: Int
-    let isDataless: Bool
 
-    init(_ status: stat) {
+    init?(_ status: stat) {
+        guard status.st_mode & S_IFMT == S_IFREG, status.st_flags & UInt32(SF_DATALESS) == 0 else { return nil }
         identity = fileIdentity(status)
         size = status.st_size
         modifiedSeconds = status.st_mtimespec.tv_sec
         modifiedNanos = status.st_mtimespec.tv_nsec
         createdSeconds = status.st_birthtimespec.tv_sec
         createdNanos = status.st_birthtimespec.tv_nsec
-        isDataless = status.st_flags & UInt32(SF_DATALESS) != 0
     }
 
     var volumeRelativeURL: URL {
@@ -177,8 +176,7 @@ private final class OldInstallerDirectory: Sendable {
         guard fd >= 0 else { return nil }
         defer { Darwin.close(fd) }
         var initial = stat()
-        guard fstat(fd, &initial) == 0, initial.st_mode & S_IFMT == S_IFREG,
-              initial.st_flags & UInt32(SF_DATALESS) == 0, OldInstallerFingerprint(initial) == fingerprint else { return nil }
+        guard fstat(fd, &initial) == 0, OldInstallerFingerprint(initial) == fingerprint else { return nil }
         var magic = [UInt8](repeating: 0, count: 4)
         guard Darwin.pread(fd, &magic, 4, 0) == 4, magic == Array("xar!".utf8) else { return nil }
         let pinned = fingerprint.volumeRelativeURL
@@ -190,7 +188,7 @@ private final class OldInstallerDirectory: Sendable {
 
     func regularFile(named name: String) -> OldInstallerFingerprint? {
         var status = stat()
-        guard fstatat(descriptor, name, &status, AT_SYMLINK_NOFOLLOW) == 0, status.st_mode & S_IFMT == S_IFREG else { return nil }
+        guard fstatat(descriptor, name, &status, AT_SYMLINK_NOFOLLOW) == 0 else { return nil }
         return OldInstallerFingerprint(status)
     }
 }
