@@ -36,6 +36,18 @@ struct XcodeCleanupTests {
         #expect(FileManager.default.fileExists(atPath: sources.path))
     }
 
+    @Test func swiftPackagesUseTheContainingDirectoryName() async throws {
+        let fixture = try XcodeFixture()
+        defer { fixture.remove() }
+        _ = try fixture.project()
+        for name in ["Design Tools", "Networking.Core"] {
+            let manifest = fixture.home.appending(path: "src").appending(component: name).appending(component: "Package.swift")
+            try fixture.writeMetadata(workspace: manifest.path)
+            let project = try #require(try await fixture.engine.scan().first)
+            #expect(project.name == name)
+        }
+    }
+
     @Test func hashedProjectWithBuildOutputsAndNoMetadataIsReadOnly() async throws {
         let fixture = try XcodeFixture()
         defer { fixture.remove() }
@@ -48,6 +60,26 @@ struct XcodeCleanupTests {
         #expect(item.name == "Older-Project")
         #expect(!item.canTrash)
         await #expect(throws: (any Error).self) { try await fixture.engine.trash(item) }
+    }
+
+    @Test func aDependencyCheckoutWithLocalSourcesMakesTheProjectReadOnly() async throws {
+        let fixture = try XcodeFixture()
+        defer { fixture.remove() }
+        _ = try fixture.project()
+        let checkouts = "DerivedData/Example-hash/SourcePackages/checkouts"
+        try fixture.directory(checkouts)
+        let empty = try #require(try await fixture.engine.scan().first)
+        #expect(empty.canTrash)
+
+        try fixture.directory(checkouts + "/Dependency/Sources")
+        let source = fixture.xcode.appending(path: checkouts + "/Dependency/Sources/Work.swift")
+        let work = Data("let localChanges = true".utf8)
+        try work.write(to: source)
+        let populated = try #require(try await fixture.engine.scan().first)
+        #expect(!populated.canTrash)
+        await #expect(throws: (any Error).self) { try await fixture.engine.trash(empty) }
+        await #expect(throws: (any Error).self) { try await fixture.engine.trash(populated) }
+        #expect(try Data(contentsOf: source) == work)
     }
 
     @Test func aRunningBuildProtectsThePreviouslyIdleProject() async throws {
