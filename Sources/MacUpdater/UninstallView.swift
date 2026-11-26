@@ -553,7 +553,7 @@ struct UninstallView: View {
         guard !targets.isEmpty else {
             show(UninstallResultPresentation.report(
                 results: skipped, apps: reportedApps,
-                files: UninstallFilePlan(groups: leftovers, results: skipped).finished(), requestedZap: zap
+                files: UninstallFilePlan(groups: leftovers, results: skipped).finished()
             ))
             announcer.announce(AnnouncementCopy.uninstallNothingRemoved())
             return
@@ -585,7 +585,7 @@ struct UninstallView: View {
             results: outcome.results,
             apps: reportedApps,
             files: outcome.files,
-            requestedZap: zap
+            failedZapIDs: outcome.failedZapIDs
         )
         if !succeeded.isEmpty {
             onWegaState?(WegaState(pose: .happy, line: trf("Załatwione — %@ mniej na dysku.", "\(succeeded.count)")))

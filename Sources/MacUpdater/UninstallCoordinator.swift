@@ -198,6 +198,7 @@ final class UninstallCoordinator: ObservableObject {
         /// One result per target id.
         let results: [String: UninstallTargetResult]
         let files: [UninstallFileResult]
+        var failedZapIDs: Set<String> = []
         var leftoversTrashed: Int { files.count { $0.status == .movedToTrash } }
     }
 
@@ -446,6 +447,7 @@ final class UninstallCoordinator: ObservableObject {
         defer { state = .idle }
 
         var results = skipped
+        var failedZapIDs = Set<String>()
         for app in targets {
             if let protection = dependencies.protection(app) {
                 results[app.id] = .protected(protection)
@@ -455,10 +457,12 @@ final class UninstallCoordinator: ObservableObject {
             } else if let stillRunning = runningAtRemoval(app) {
                 results[app.id] = stillRunning
             } else if app.isManagedByBrew, let token = app.caskToken {
+                let usesZap = options.zap && options.duplicateReview == nil
                 do {
-                    try await dependencies.uninstallCask(brewService, token, options.zap && options.duplicateReview == nil)
+                    try await dependencies.uninstallCask(brewService, token, usesZap)
                     results[app.id] = .removedByHomebrew
                 } catch {
+                    if usesZap { failedZapIDs.insert(app.id) }
                     results[app.id] = .failed(error.localizedDescription)
                 }
             } else {
@@ -467,7 +471,7 @@ final class UninstallCoordinator: ObservableObject {
         }
         let plan = UninstallFilePlan(groups: leftovers, results: results, preservingOtherCopy: options.duplicateReview != nil)
         let cleanup = dependencies.trashLeftovers(plan.ready)
-        return Outcome(results: results, files: plan.finished(cleanup))
+        return Outcome(results: results, files: plan.finished(cleanup), failedZapIDs: failedZapIDs)
     }
 
     /// The quit phase decided "stopped" before the force-quit sheet and the write lease, both of
