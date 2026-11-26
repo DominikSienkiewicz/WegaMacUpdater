@@ -21,49 +21,64 @@ struct UninstallLeftoverPresentationTests {
 
         #expect(sections.map(\.id) == [Fixture.obsidian.id, Fixture.zed.id])
         #expect(sections.map(\.group) == [Fixture.obsidian, Fixture.zed])
-        #expect(sections[0].main.map(\.id) == [Fixture.zap, Fixture.plist, Fixture.coTarget].map(\.id))
+        #expect(sections[0].personalData.map(\.id) == [Fixture.zap, Fixture.plist, Fixture.coTarget].map(\.id))
         #expect(
             sections[0].probable.map(\.id)
                 == [Fixture.byName, Fixture.outside, Fixture.weakZap, Fixture.shared, Fixture.sharedOutside].map(\.id),
             "probable items and items another app still uses keep their canonical order"
         )
-        #expect(sections[1].main.map(\.id) == [Fixture.zedPlist.id])
+        #expect(sections[1].personalData.map(\.id) == [Fixture.zedPlist.id])
         #expect(sections[1].probable.map(\.id) == [Fixture.zedByName.id])
     }
 
-    @Test func defaultSelectionSkipsProbableAndShared() {
-        let selection = Presentation.defaultSelection([Fixture.obsidian, Fixture.zed], applicationsIncomplete: false)
+    @Test func appOnlyPreservesProfilesAndTemporaryFilesUntilSelected() {
+        let cache = Fixture.item("Library/Caches/md.obsidian", source: .bundleIdentifier)
+        let log = Fixture.item("Library/Logs/md.obsidian", source: .bundleIdentifier)
+        let container = Fixture.item("Library/Containers/md.obsidian", source: .bundleIdentifier)
+        let nested = Fixture.item("Library/Application Support/md.obsidian/Library/Caches/data", source: .bundleIdentifier)
+        let groups = [Fixture.group("Obsidian", [
+            cache, log, Fixture.plist, container, nested, Fixture.byName, Fixture.shared
+        ])]
 
-        #expect(selection == Set([Fixture.zap, Fixture.plist, Fixture.coTarget, Fixture.zedPlist].map(\.url.path)))
+        #expect(groups.flatMap(\.items).allSatisfy { !$0.isSelectedByDefault })
+        #expect(Presentation.bulkPaths(groups) == [cache.url.path, log.url.path])
+        #expect(Presentation.bulkPaths(groups, applicationsIncomplete: true).isEmpty)
+        let section = Presentation.sections(groups).first
+        #expect(section?.cacheAndLogs == [cache, log])
+        #expect(section?.personalData == [Fixture.plist, container, nested])
+        #expect(section?.probable == [Fixture.byName, Fixture.shared])
+    }
+
+    @Test func fullScanLeavesEveryAppFileUnticked() {
+        #expect([Fixture.obsidian, Fixture.zed].flatMap(\.items).allSatisfy { !$0.isSelectedByDefault })
     }
 
     /// Spec §5.5: an app missing from an incomplete scan may still use any item.
     @Test func incompleteScanTicksNothing() {
         let groups = [Fixture.obsidian, Fixture.zed]
 
-        #expect(Presentation.defaultSelection(groups, applicationsIncomplete: true).isEmpty)
-        #expect(!Presentation.defaultSelection(groups, applicationsIncomplete: false).isEmpty, "positive control")
+        #expect(groups.flatMap(\.items).allSatisfy { !$0.isSelectedByDefault })
+        #expect(Presentation.bulkPaths(groups, applicationsIncomplete: true).isEmpty)
     }
 
-    @Test func selectAllCoversOnlyMainList() {
+    @Test func selectCacheAndLogsLeavesPersonalAndUncertainItemsUnticked() {
         let paths = Presentation.bulkPaths([Fixture.obsidian, Fixture.zed])
 
-        #expect(paths == [Fixture.zap, Fixture.plist, Fixture.coTarget, Fixture.zedPlist].map(\.url.path))
+        #expect(paths.isEmpty)
     }
 
-    /// Owner decision 2026-11-17: "Odznacz wszystko" clears every leftover of the sheet, probable
-    /// ones included, while "Zaznacz wszystko" still ticks the main list only.
+    /// Clearing the selection also clears individually ticked items.
     @Test func deselectAllClearsProbableItemsToo() throws {
         let groups = [Fixture.obsidian, Fixture.zed]
-        var selected = Presentation.defaultSelection(groups, applicationsIncomplete: false)
+        var selected: Set<String> = []
         selected.insert(Fixture.byName.url.path)
 
         selected.subtract(Presentation.deselectAllPaths(groups))
 
         #expect(selected.isEmpty, "a probable item ticked by hand is cleared too")
         let view = try Fixture.source("Sources/MacUpdater/UninstallLeftoverSelection.swift")
-        #expect(view.contains("if allSelected { selected.subtract(UninstallLeftoverPresentation.deselectAllPaths(groups)) }"))
-        #expect(view.contains("else { selected.formUnion(bulkPaths) }"))
+        #expect(view.contains("selected.subtract(UninstallLeftoverPresentation.deselectAllPaths(groups))"))
+        #expect(view.contains("selected.formUnion(bulkPaths)"))
     }
 
     @Test func sourceLabelPrecedence() {
@@ -83,7 +98,7 @@ struct UninstallLeftoverPresentationTests {
         #expect(Presentation.sourceLabel(Fixture.vendorFolder) == tr("lista Homebrew (wspólny folder?)"))
         #expect(Translations.en["lista Homebrew (wspólny folder?)"] == "Homebrew list (shared folder?)")
         #expect(Presentation.sections([Fixture.word]).first?.probable == [Fixture.vendorFolder])
-        #expect(Presentation.defaultSelection([Fixture.word], applicationsIncomplete: false).isEmpty)
+        #expect(!Fixture.vendorFolder.isSelectedByDefault)
     }
 
     @Test func sizeTextStates() {
@@ -127,10 +142,11 @@ struct UninstallLeftoverPresentationTests {
     @Test func probableHeadingIsAHeaderAndSourceLabelShowsOnHover() throws {
         let view = try Fixture.source("Sources/MacUpdater/UninstallLeftoverSelection.swift")
         let heading = try Fixture.body(
-            of: "Text(tr(\"Prawdopodobne — sprawdź przed zaznaczeniem\"))", endingAt: "rows(section.probable)", in: view
+            of: "private func sectionHeading(", endingAt: "private func rows(", in: view
         )
         let row = try Fixture.body(of: "private struct UninstallLeftoverRow: View {", endingAt: ".toggleStyle(", in: view)
 
+        #expect(view.contains("sectionHeading(tr(\"Prawdopodobne — sprawdź przed zaznaczeniem\"))"))
         #expect(heading.contains(".accessibilityAddTraits(.isHeader)"))
         #expect(row.contains("Text(sourceLabel)"))
         #expect(row.contains(".help(sourceLabel)"))
@@ -144,7 +160,7 @@ struct UninstallLeftoverPresentationTests {
 
     @Test func notesSayWhyItemsAreMissingOrUnticked() {
         let catalog = tr("Lista Homebrew jest niedostępna — pokazano tylko resztki znalezione po identyfikatorze i nazwie.")
-        let incomplete = tr("Lista aplikacji jest niepełna — nic nie jest zaznaczone domyślnie.")
+        let incomplete = tr("Lista aplikacji jest niepełna. Inne aplikacje mogą używać tych plików. Wybierz je pojedynczo.")
 
         #expect(Presentation.notes(catalogUnavailable: false, applicationsIncomplete: false).isEmpty)
         #expect(Presentation.notes(catalogUnavailable: true, applicationsIncomplete: false) == [catalog])
@@ -165,6 +181,10 @@ struct UninstallLeftoverPresentationTests {
     @Test func everyNewStringHasItsEnglishValue() {
         let english: [String: String] = [
             "Resztki aplikacji": "App leftovers",
+            "Domyślnie zachowasz wszystkie pliki z tej listy.": "All files in this list are kept by default.",
+            "Zaznacz pamięć podręczną i logi": "Select caches and logs",
+            "Pamięć podręczna i logi": "Caches and logs",
+            "Ustawienia, profile i inne dane aplikacji": "Settings, profiles and other app data",
             "Prawdopodobne — sprawdź przed zaznaczeniem": "Probable — check before ticking",
             "lista Homebrew": "Homebrew list",
             "lista Homebrew (dopasowanie po nazwie)": "Homebrew list (matched by name)",
@@ -176,8 +196,8 @@ struct UninstallLeftoverPresentationTests {
             "%@ · %@ zaznaczone": "%@ · %@ ticked",
             "Lista Homebrew jest niedostępna — pokazano tylko resztki znalezione po identyfikatorze i nazwie.":
                 "The Homebrew list is unavailable — showing only leftovers found by bundle id and name.",
-            "Lista aplikacji jest niepełna — nic nie jest zaznaczone domyślnie.":
-                "The app list is incomplete — nothing is ticked by default.",
+            "Lista aplikacji jest niepełna. Inne aplikacje mogą używać tych plików. Wybierz je pojedynczo.":
+                "The app list is incomplete. Other apps may use these files. Select them individually.",
         ]
         for (polish, value) in english {
             #expect(Translations.en[polish] == value, "\(polish)")
@@ -186,7 +206,7 @@ struct UninstallLeftoverPresentationTests {
     }
 
     /// The view cannot be driven from a package test, so this pins the wiring: the sheet opens
-    /// with `defaultSelection` and nothing else, fed by the last scan's applications failure.
+    /// with no file selected, and a fresh confirmation clears any prior file consent.
     /// The installed list and its completeness are read together before the first `await`: a
     /// scan finishing during that wait must not pair a partial list with a "complete" flag.
     @Test func sheetOpensWithTheDefaultSelection() throws {
@@ -195,11 +215,9 @@ struct UninstallLeftoverPresentationTests {
         let scan = try Fixture.body(of: "private func scan() async", endingAt: "/// - Parameter reported:", in: view)
         let firstAwait = try #require(present.range(of: "await "))
         let beforeFirstAwait = present[..<firstAwait.lowerBound]
-        let selection = try Fixture.body(of: "UninstallLeftoverPresentation.defaultSelection(", endingAt: ")", in: String(present))
-
-        #expect(present.contains("selectedLeftovers = UninstallLeftoverPresentation.defaultSelection("))
-        #expect(present.components(separatedBy: "selectedLeftovers =").count == 2,
-                "nothing else ticks leftovers when the sheet opens")
+        #expect(present.components(separatedBy: "selectedLeftovers").count == 2,
+                "preparing the sheet only clears the previous file selection")
+        #expect(present.contains("selectedLeftovers.removeAll()"))
         #expect(scan.contains("applicationsSourceFailed = scan.failures.contains { $0.source == .applications }"))
 
         #expect(beforeFirstAwait.contains("let installed = apps"))
@@ -207,7 +225,6 @@ struct UninstallLeftoverPresentationTests {
                 "the applications source alone decides, not scanFailed")
         #expect(present.contains("operations.scanLeftovers(for: attempted, installed: installed)"))
         #expect(!present.contains("installed: apps"), "a later scan's list must not reach the planner")
-        #expect(selection.contains("applicationsIncomplete: applicationsIncomplete"))
         #expect(present.contains("pendingApplicationsIncomplete = applicationsIncomplete"))
     }
 
@@ -271,7 +288,7 @@ private enum UninstallLeftoverPresentationFixtures {
         return text[from.upperBound..<to.lowerBound]
     }
 
-    private static func item(
+    static func item(
         _ relative: String,
         source: LeftoverItem.Source,
         probable: LeftoverItem.ProbableReason? = nil,
@@ -287,7 +304,7 @@ private enum UninstallLeftoverPresentationFixtures {
         )
     }
 
-    private static func group(_ name: String, _ items: [LeftoverItem]) -> LeftoverGroup {
+    static func group(_ name: String, _ items: [LeftoverItem]) -> LeftoverGroup {
         LeftoverGroup(
             app: ApplicationInfo(
                 path: URL(filePath: "/Applications/\(name).app", directoryHint: .isDirectory),

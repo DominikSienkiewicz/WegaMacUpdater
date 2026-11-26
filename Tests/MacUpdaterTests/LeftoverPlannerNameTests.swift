@@ -34,7 +34,7 @@ struct LeftoverPlannerNameTests {
         #expect(items.map(\.url) == [support, logs])
         #expect(items.map(\.url.lastPathComponent) == ["zed", "Zed"])
         #expect(items.allSatisfy { $0.source == .appName && $0.probableReason == .appName })
-        #expect(items.allSatisfy { !$0.isSelectedByDefault })
+        #expect(items.allSatisfy { !$0.hasStrongUnsharedMatch })
     }
 
     @Test func fileNameIsAnotherSourceOfNames() throws {
@@ -92,7 +92,7 @@ struct LeftoverPlannerNameTests {
 
         #expect(items.map(\.url) == [support])
         #expect(items.first?.source == .bundleIdentifier)
-        #expect(items.first?.isSelectedByDefault == true)
+        #expect(items.first?.hasStrongUnsharedMatch == true)
     }
 
     @Test func anyNonProbableSourceMakesTheItemNonProbable() throws {

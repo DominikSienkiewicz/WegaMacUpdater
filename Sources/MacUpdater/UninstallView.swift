@@ -42,8 +42,7 @@ struct UninstallView: View {
     @State private var pendingLeftoverCatalogUnavailable: Bool = false
     /// The scan behind the sheet could not read the applications, frozen when the sheet opens.
     @State private var pendingApplicationsIncomplete: Bool = false
-    /// UX-13: which leftover paths the user has ticked for the Trash. The sheet opens with
-    /// `UninstallLeftoverPresentation.defaultSelection`; the user ticks or unticks the rest.
+    /// Paths explicitly selected for the Trash in this confirmation.
     @State private var selectedLeftovers: Set<String> = []
     /// The running state of `pendingUninstallTargets`, computed when the sheet opens.
     @State private var pendingRunningStates: [String: RunningApplicationResolution] = [:]
@@ -421,9 +420,7 @@ struct UninstallView: View {
         pendingLeftoverGroups = leftovers.groups
         pendingLeftoverCatalogUnavailable = leftovers.catalogUnavailable
         pendingApplicationsIncomplete = applicationsIncomplete
-        selectedLeftovers = UninstallLeftoverPresentation.defaultSelection(
-            leftovers.groups, applicationsIncomplete: applicationsIncomplete
-        )
+        selectedLeftovers.removeAll()
         showDialog = true
     }
 

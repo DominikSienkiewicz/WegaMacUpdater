@@ -1,7 +1,7 @@
 import Foundation
 
 /// Decides which items in the user's home folder are offered for the Trash after apps are
-/// uninstalled, and which of them are ticked by default.
+/// uninstalled, with the evidence linking each item to the apps in the plan.
 ///
 /// The disk is only read, through `CleanupFileSystem`: `lstat`s and directory listings. Every
 /// path passes `LeftoverPathRules.isOfferable` before it is read, and again after a wildcard is
