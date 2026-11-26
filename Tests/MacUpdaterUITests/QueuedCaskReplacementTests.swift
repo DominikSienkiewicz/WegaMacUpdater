@@ -94,6 +94,35 @@ struct QueuedCaskReplacementTests {
         #expect(store.updateTargets(for: .all).map(\.key) == ["m:" + app.path.path])
     }
 
+    @Test func onlyStillOfferedReplacementsBlockedByDiskStayQueued() {
+        let store = ScanStore()
+        let app = makeApp()
+        let replacement = QueuedCaskReplacement(app: app, token: "test-queue-example")
+        store.manualOutdated = [app]
+        store.caskProfiles[replacement.token] = profile(artifact: app.path.lastPathComponent)
+        let finishedKey = "f:already-updated"
+        store.selected = [replacement.key, finishedKey]
+        var row = ScanStore.LaneItemResult(item: replacement.item, outcome: nil)
+        row.postponeReason = .insufficientDisk(required: 5_000_000_000, available: 2_000_000_000)
+
+        store.finishReplacementSelection([row])
+        #expect(store.selected == [replacement.key])
+        #expect(store.banner?.action == .openCleanup)
+        store.dismissBanner()
+
+        store.manualOutdated = []
+        store.finishReplacementSelection([row])
+        #expect(store.selected.isEmpty)
+        #expect(store.banner == nil)
+
+        store.manualOutdated = [app]
+        store.selected = [replacement.key]
+        row.postponeReason = .diskSpaceUnknown
+        store.finishReplacementSelection([row])
+        #expect(store.selected.isEmpty)
+        #expect(store.banner == nil)
+    }
+
     private func profile(artifact: String) -> CaskArtifactProfile {
         CaskArtifactProfile(token: "test-queue-example", homepage: nil, artifacts: [
             CaskArtifact(kind: .app, names: [artifact])

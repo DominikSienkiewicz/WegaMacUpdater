@@ -908,6 +908,10 @@ final class ScanStore: ObservableObject {
         banners.dismissCurrent()
     }
 
+    func clearDiskSpaceBanner() {
+        banners.removeAll { $0.action == .openCleanup }
+    }
+
     func emitWegaState(_ state: WegaState) {
         lastWegaState = state
         sinks.wegaState?(state)

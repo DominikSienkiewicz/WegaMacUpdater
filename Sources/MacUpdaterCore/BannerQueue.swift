@@ -44,4 +44,9 @@ public struct BannerQueue<Banner: Equatable>: Equatable {
         sticky.removeAll()
         transient = nil
     }
+
+    public mutating func removeAll(where matches: (Banner) -> Bool) {
+        sticky.removeAll(where: matches)
+        if let transient, matches(transient) { self.transient = nil }
+    }
 }

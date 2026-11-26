@@ -31,6 +31,9 @@ struct ScanBannerHost: View {
     private func perform(_ action: BannerAction) {
         switch action {
         case .openLogs: onNavigate?(.logs)
+        case .openCleanup:
+            scan.dismissBanner()
+            onNavigate?(.cleanup)
         case .openSettings, .openTouchIDCard:
             SettingsRoute.shared.open(.touchID, with: openSettings)
         case .openHelperSettings:

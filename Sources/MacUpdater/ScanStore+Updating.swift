@@ -52,6 +52,7 @@ extension ScanStore {
             return
         }
         defer { dependencies.upgradeMutex.release() }
+        clearDiskSpaceBanner()
         resetUpdateInterruption()
         // C2 stage 4 — the next run closes the previous run's summary, once it holds the lock.
         closeRunReport()
@@ -226,7 +227,6 @@ extension ScanStore {
         // whole set of commands this method may execute. It is also the worst possible
         // moment for it — clearing Homebrew's cache of previous versions removes what a
         // recovery from a bad upgrade would reinstall from.
-        selected.removeAll()
         restartCandidates = candidates
         restartDockerBundleURLs = dockerRestartBundles(
             tokens: runnableCaskNames, appPaths: caskPreparation?.appPaths ?? [:], running: runningApplications
@@ -271,6 +271,7 @@ extension ScanStore {
                caskOperationID: caskPreparation?.operation.operation.id,
                caskAppPaths: (caskPreparation?.appPaths ?? [:]).merging(replacementPaths) { first, _ in first },
                replacementOperations: replacementOperations)
+        finishReplacementSelection(replacementRows)
         // LT-01 — the run's committed snapshots are the undo section's content.
         refreshUndoableUpdates()
     }

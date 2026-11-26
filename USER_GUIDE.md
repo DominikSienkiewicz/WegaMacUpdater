@@ -158,6 +158,14 @@ them.
 
 ### Checking status in Inventory
 
+Click the **Size** column heading to measure installed applications and show the largest
+first. Click again to reverse the order. Click a size for its breakdown. The estimate
+includes the application bundle and any folders in your Library's `Caches` and
+`Application Support` named for its exact bundle identifier. For multiple copies with
+the same identifier, Wega counts each bundle separately and leaves out their shared
+data. Protected locations such as app containers are outside this estimate. Unknown
+sizes appear at the end in both directions.
+
 The **Sprawdzenie** (Check status) column describes an update check of that particular
 installed copy, separately from its Brew/App Store/manual origin. Click the status for
 the sources, last attempt and last complete check. **Wymaga sprawdzenia** (Needs checking)
@@ -584,6 +592,11 @@ opens this guide.
 | **⌘1** to **⌘7** | Go to a section of the sidebar. |
 
 ### When something fails
+
+If an update reports insufficient disk space, **Review Cleanup** opens **Cleanup**.
+Use **Scan** to find candidates and review what you want to remove. Moving files to the
+Trash frees space only once you empty it. **Back to Updates** restores your previous
+category. Start the queued updates again to check the available space and continue.
 
 On **Updates**, during an update run and on **Undo updates**, every error banner says what to do
 next and has a button for it. Most of them are **Show in Logs**, which opens **Logs** with the

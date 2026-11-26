@@ -46,8 +46,10 @@ extension Translations {
             "Battery is low. Connect power and try again.",
         "Nie mogę odczytać wolnego miejsca. Spróbuj ponownie; jeśli to wróci, otwórz Logi.":
             "I can't read the free disk space. Try again; if it happens again, open Logs.",
-        "Za mało miejsca: potrzeba około %@. Zwolnij miejsce i spróbuj ponownie.":
-            "Not enough space: about %@ is needed. Free up space and try again.",
+        "Do aktualizacji brakuje około %@. Zwolnij miejsce i spróbuj ponownie.":
+            "Not enough space: about %@ more is needed. Free up space and try again.",
+        "Przejrzyj porządki": "Review Cleanup",
+        "Wróć do aktualizacji": "Back to Updates",
         "suma zostanie sprawdzona": "checksum will be checked",
         "źródło nie podaje sumy do sprawdzenia": "the source provides no checksum to verify",
         "Do Kosza: %@": "To Trash: %@",

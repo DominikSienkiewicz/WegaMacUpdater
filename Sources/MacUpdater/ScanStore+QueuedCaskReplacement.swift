@@ -41,7 +41,9 @@ extension ScanStore {
             markRunRow(item.key, .failed)
             return LaneItemResult(item: item, outcome: nil, publisherVeto: .changed(old: old, new: new))
         case .resourcePostponed(let reason):
-            return queuedReplacementFailure(item: item, reason: reason.localizedMessage)
+            var result = queuedReplacementFailure(item: item, reason: reason.localizedMessage)
+            result.postponeReason = reason
+            return result
         case .journalUnavailable(let reason):
             return queuedReplacementFailure(item: item, reason: reason)
         case .snapshotFailed, .caskInstallsNoApp:
@@ -111,5 +113,16 @@ extension ScanStore {
         return LaneItemResult(item: item, outcome: BrewUpgradeOutcome(
             exitCode: -1, failedTokens: [item.name], errorLines: [reason]
         ))
+    }
+
+    func finishReplacementSelection(_ rows: [LaneItemResult]) {
+        let blocked = rows.filter { $0.postponeReason?.diskShortfall != nil }
+        selected.formIntersection(blocked.map(\.item.key))
+        guard !selected.isEmpty else { return }
+        restrictSelection(to: .all)
+        let reasons = blocked.filter { selected.contains($0.item.key) }.compactMap(\.postponeReason)
+        guard let worst = reasons.max(by: { ($0.diskShortfall ?? 0) < ($1.diskShortfall ?? 0) }) else { return }
+        showStickyBanner(BannerData(variant: .danger, title: tr("Odkładam pobieranie"),
+                                    message: worst.localizedMessage, action: .openCleanup))
     }
 }

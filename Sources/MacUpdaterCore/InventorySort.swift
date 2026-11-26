@@ -2,7 +2,9 @@ import Foundation
 
 /// The column the inventory table is sorted by.
 public enum InventorySortKey: String, CaseIterable, Sendable {
-    case name, version, bundleId, source, updateDate
+    case name, version, bundleId, source, updateDate, diskUsage
+
+    public var initiallyAscending: Bool { self != .diskUsage }
 }
 
 /// Ordering for the inventory table. Lifted out of `InventoryView` so the
@@ -19,13 +21,33 @@ public enum InventorySort {
     /// one application never swap places between two renders of the same list.
     public static func comparator(
         key: InventorySortKey,
-        ascending: Bool
+        ascending: Bool,
+        footprints: [InstallationIdentity: InventoryFootprint] = [:]
     ) -> (ApplicationInfo, ApplicationInfo) -> Bool {
-        { a, b in
+        let before: (ApplicationInfo, ApplicationInfo) -> Bool
+        switch key {
+        case .name:       before = { $0.name < $1.name }
+        case .version:    before = { ($0.version ?? "") < ($1.version ?? "") }
+        case .bundleId:   before = { ($0.bundleIdentifier ?? "") < ($1.bundleIdentifier ?? "") }
+        case .source:     before = { sourceRank($0) < sourceRank($1) }
+        case .updateDate: before = { ($0.updateDate ?? .distantPast) < ($1.updateDate ?? .distantPast) }
+        case .diskUsage:
+            return { a, b in
+                let left = footprints[a.installation]?.totalBytes
+                let right = footprints[b.installation]?.totalBytes
+                switch (left, right) {
+                case let (left?, right?) where left != right: return ascending ? left < right : left > right
+                case (_?, nil): return true
+                case (nil, _?): return false
+                default: return a.installation < b.installation
+                }
+            }
+        }
+        return { a, b in
             let lhs = ascending ? a : b
             let rhs = ascending ? b : a
-            if isOrderedBefore(lhs, rhs, by: key) { return true }
-            if isOrderedBefore(rhs, lhs, by: key) { return false }
+            if before(lhs, rhs) { return true }
+            if before(rhs, lhs) { return false }
             return a.installation < b.installation
         }
     }
@@ -33,23 +55,10 @@ public enum InventorySort {
     public static func sorted(
         _ apps: [ApplicationInfo],
         by key: InventorySortKey,
-        ascending: Bool
+        ascending: Bool,
+        footprints: [InstallationIdentity: InventoryFootprint] = [:]
     ) -> [ApplicationInfo] {
-        apps.sorted(by: comparator(key: key, ascending: ascending))
-    }
-
-    private static func isOrderedBefore(
-        _ a: ApplicationInfo,
-        _ b: ApplicationInfo,
-        by key: InventorySortKey
-    ) -> Bool {
-        switch key {
-        case .name:       return a.name < b.name
-        case .version:    return (a.version ?? "") < (b.version ?? "")
-        case .bundleId:   return (a.bundleIdentifier ?? "") < (b.bundleIdentifier ?? "")
-        case .source:     return sourceRank(a) < sourceRank(b)
-        case .updateDate: return (a.updateDate ?? .distantPast) < (b.updateDate ?? .distantPast)
-        }
+        apps.sorted(by: comparator(key: key, ascending: ascending, footprints: footprints))
     }
 
     private static func sourceRank(_ app: ApplicationInfo) -> Int {
