@@ -62,7 +62,7 @@ struct WindowRunResourceDecisionTests {
         await harness.store.runUpdate(targetKeys: [key])
 
         let banner = try #require(harness.store.banner)
-        #expect(banner.action == .openCleanup)
+        #expect(banner.action == .openCleanup(UpdateDiskBudget(required: 5_000_000_000, available: 2_000_000_000)))
         let shortfall = ByteCountFormatter.string(fromByteCount: 3_000_000_000, countStyle: .file)
         #expect(banner.message.contains(shortfall))
         #expect(harness.store.selected == [key])
@@ -71,7 +71,7 @@ struct WindowRunResourceDecisionTests {
         await harness.store.runUpdate(targetKeys: harness.store.selected)
         #expect(asked.tokens == [token, token])
         #expect(runner.upgraded(token))
-        #expect(harness.store.banner?.action != .openCleanup)
+        #expect(harness.store.banner?.action?.cleanupBudget == nil)
     }
 
     @Test(arguments: [PostponeReason.diskSpaceUnknown, .meteredNetwork, .lowBattery])

@@ -84,7 +84,6 @@ struct DetailColumn: View {
     @State private var inspectorDialogOpen = false
     /// ⌘F's query on Updates (UXP-35). `UpdatesSearchField` empties it when Updates goes off screen.
     @State private var updatesSearch = ""
-    @State private var cleanupReturnFilter: UpdateFilter?
 
     private var holdsBall: Bool {
         WegaAttention.holdsBall(bannerVariant: scan.banner?.variant, isUpdating: scan.updating, dialogOpen: dialogOpen || inspectorDialogOpen)
@@ -153,9 +152,9 @@ struct DetailColumn: View {
                     quip = nil
                 }
             }
-            .onChange(of: selection) { _, destination in
+            .onChange(of: selection) { previous, destination in
                 if destination != .uninstall { duplicateReviewBundleIdentifier = nil }
-                if destination != .cleanup { cleanupReturnFilter = nil }
+                scan.endCleanupSpaceReviewIfLeaving(from: previous, to: destination)
             }
             .onChange(of: holdsBall, initial: true) { _, held in wegaAttentionHeld = held }
     }
@@ -180,7 +179,7 @@ struct DetailColumn: View {
     /// banner is pointing at.
     private func navigate(fromBanner tab: SidebarTab) {
         if tab == .logs { logsInitialFilter = .errorsOnly; logsErrorBadge = 0 }
-        if tab == .cleanup { cleanupReturnFilter = selection.filter ?? .all }
+        if tab == .cleanup { scan.setCleanupReturnDestination(from: selection) }
         onNavigate(SidebarSelection.forTab(tab))
     }
 
@@ -234,7 +233,8 @@ struct DetailColumn: View {
                         preselection: uninstallPreselection,
                         onPreselectionUsed: { uninstallPreselection = nil },
                         duplicateBundleIdentifier: duplicateReviewBundleIdentifier,
-                        onEndDuplicateReview: { duplicateReviewBundleIdentifier = nil }
+                        onEndDuplicateReview: { duplicateReviewBundleIdentifier = nil },
+                        onReviewPreselectedCopies: { duplicateReviewBundleIdentifier = $0 }
                     )
                 case .cleanup:
                     CleanupView(
@@ -249,10 +249,17 @@ struct DetailColumn: View {
                             onNavigate(.uninstall)
                         }
                     )
+                    .safeAreaInset(edge: .top, spacing: 0) {
+                        if let review = scan.cleanupSpaceReview {
+                            CleanupSpaceRecheckCard(review: review) {
+                                Task { await scan.recheckCleanupSpace(review.id) }
+                            }
+                        }
+                    }
                     .toolbar {
-                        if let filter = cleanupReturnFilter {
+                        if let review = scan.cleanupSpaceReview {
                             ToolbarItem {
-                                Button { onNavigate(.updates(filter)) } label: {
+                                Button { onNavigate(.updates(review.returnFilter)) } label: {
                                     Label(tr("Wróć do aktualizacji"), systemImage: "arrow.backward")
                                 }
                                 .labelStyle(.titleAndIcon)
@@ -262,7 +269,11 @@ struct DetailColumn: View {
                 case .migration:
                     MigrationView(onWegaState: { wegaState = $0 }, onNavigate: navigate(fromBanner:))
                 case .inventory:
-                    InventoryView(onWegaState: { wegaState = $0 }, onNavigate: onNavigate)
+                    InventoryView(onWegaState: { wegaState = $0 }, onNavigate: onNavigate, onReviewUninstall: { path, group in
+                        uninstallPreselection = path
+                        duplicateReviewBundleIdentifier = group
+                        onNavigate(.uninstall)
+                    })
                 case .rollback:
                     RollbackView(onNavigate: navigate(fromBanner:))
                 case .logs:

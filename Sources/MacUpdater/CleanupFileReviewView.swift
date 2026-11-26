@@ -18,6 +18,7 @@ struct CleanupFileReviewView: View {
     let page: CleanupPage
     let search: String
     @ObservedObject var store: CleanupFileReviewStore
+    @State private var showsRuntimes = false
     @State private var order = CleanupFileOrder.largest
     @State private var confirming: ReviewedCleanupFile?
 
@@ -60,7 +61,8 @@ struct CleanupFileReviewView: View {
                          primaryButton: .cancel(Text(tr("Anuluj"))),
                          secondaryButton: .destructive(Text(tr("Przenieś do Kosza"))) { store.moveToTrash(file) })
         }
-        .wegaAttention(confirming != nil || store.error != nil)
+        .sheet(isPresented: $showsRuntimes) { SimulatorRuntimeReviewView(store: store) }
+        .wegaAttention(confirming != nil || store.error != nil || showsRuntimes)
     }
 
     private var controls: some View {
@@ -78,6 +80,11 @@ struct CleanupFileReviewView: View {
                 }
                 Button { scan() } label: { Label(tr("Skanuj"), systemImage: "magnifyingglass") }
                     .disabled(page == .installers && store.installerFolder == nil)
+                if page == .xcode {
+                    Button { showsRuntimes = true } label: {
+                        Label(tr("Środowiska symulatorów"), systemImage: "iphone")
+                    }
+                }
                 Spacer()
                 Picker(tr("Sortowanie"), selection: $order) {
                     Text(tr("Największe najpierw")).tag(CleanupFileOrder.largest)

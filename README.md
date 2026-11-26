@@ -298,7 +298,8 @@ Package-manager actions expose their commands in a dry-run panel; supported cask
 can restore the previous bundle when replacement fails. You can add eligible Homebrew repairs
 and app takeovers individually to the same queue and review them before starting the run.
 When a Homebrew update needs more disk space, Wega shows the shortfall and opens Cleanup
-on request. **Back to Updates** returns to the previous list so you can retry the queue.
+on request. **Check space again** compares the newly available space with that
+update's requirement. **Back to Updates** returns to the previous list so you can retry the queue.
 Vendor handoffs open the owning updater. Details in
 [Features](docs/features.md).
 
@@ -317,13 +318,19 @@ installer packages or Java runtimes.
 Cleanup offers two on-demand file reviews. **Old installers** finds `.dmg` and `.pkg`
 files in a folder you choose. **Xcode cleanup** lists each project's build data and
 shows release archives separately. Both views display file sizes and modification dates.
+**Simulator runtimes** lists the platforms and versions reported by the selected Xcode
+installation and opens Xcode for component management.
 
 Cleanup lists distinct copies of an application by bundle identifier, path, and version.
 From there you can review the copies and choose one to uninstall with its shared app data
 preserved. Links to an existing copy count as part of that installation.
 
 In Inventory, click **Size** to measure and sort installations from largest to smallest.
-Click a result for the bundle, cache and application support breakdown.
+Click a result for the bundle, cache and application support breakdown. **Change since
+last measurement** ranks their growth since the previous local measurement. Refresh
+Inventory while viewing sizes to take another measurement.
+The **Large and last opened 90+ days ago** filter combines sizes with Spotlight's
+last-opened date and offers an uninstall review for the selected copy.
 
 Cask repair checks version and build changes before recording success. Homebrew and
 Discord's own updater can both act on the same bundle. Wega verifies Discord Stable on

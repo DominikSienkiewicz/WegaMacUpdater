@@ -14,11 +14,13 @@ struct InventorySources {
     ) throws -> [ApplicationInfo]
     let masList: () async throws -> [MasInstalledApp]
     let npmGlobals: () async throws -> [NpmGlobalPackage]
+    var readActivity: ([ApplicationInfo]) -> [InstallationIdentity: InventoryAppActivity] = { _ in [:] }
 }
 
 struct InventorySnapshot: Equatable, Sendable {
     let apps: [ApplicationInfo]
     let npmGlobals: [NpmGlobalPackage]
+    let activity: [InstallationIdentity: InventoryAppActivity]
     /// REL-14: sources that failed during the scan. Empty means the scan was clean;
     /// a non-empty value means the table is partial and the store raises the banner.
     let failures: [ScanSourceFailure]
@@ -26,11 +28,13 @@ struct InventorySnapshot: Equatable, Sendable {
     init(
         apps: [ApplicationInfo],
         npmGlobals: [NpmGlobalPackage],
-        failures: [ScanSourceFailure] = []
+        failures: [ScanSourceFailure] = [],
+        activity: [InstallationIdentity: InventoryAppActivity] = [:]
     ) {
         self.apps = apps
         self.npmGlobals = npmGlobals
         self.failures = failures
+        self.activity = activity
     }
 
     /// REL-14: runs every inventory source, recording a `ScanSourceFailure` for each one
@@ -100,7 +104,7 @@ struct InventorySnapshot: Equatable, Sendable {
         }
         catch { failures.append(ScanSourceFailure(source: .npm, message: error.localizedDescription)) }
 
-        return InventorySnapshot(apps: apps, npmGlobals: npmPackages, failures: failures)
+        return InventorySnapshot(apps: apps, npmGlobals: npmPackages, failures: failures, activity: sources.readActivity(apps))
     }
 }
 
@@ -139,7 +143,10 @@ struct LiveInventorySnapshotLoader: InventorySnapshotLoading {
                     )
                 },
                 masList: { try await masService.list() },
-                npmGlobals: { try await npmService.installedGlobals() }
+                npmGlobals: { try await npmService.installedGlobals() },
+                readActivity: { apps in
+                    InventoryAppActivity.read(apps: apps, protections: UninstallEligibility.protections(for: apps))
+                }
             )
         )
     }
@@ -175,25 +182,50 @@ extension InventoryChangeStamp {
     }
 }
 
+protocol InventoryFootprintReading: Sendable {
+    func measure(_ apps: [ApplicationInfo]) async throws -> [InstallationIdentity: InventoryFootprint]
+}
+
+extension InventoryFootprintReader: InventoryFootprintReading {}
+
 @MainActor
 final class InventoryStore: ObservableObject {
     @Published private(set) var apps: [ApplicationInfo] = []
     @Published private(set) var npmGlobals: [NpmGlobalPackage] = []
+    @Published private(set) var activity: [InstallationIdentity: InventoryAppActivity] = [:]
     @Published private(set) var isScanning = false
     @Published private(set) var errorMessage: String?
 
     /// When the last successful read finished, partial reads included. `nil` until then;
     /// a cancelled or failed read leaves it alone.
     @Published private(set) var lastReadAt: Date?
+    @Published private(set) var footprintMeasurement: InventoryFootprintMeasurement?
+    @Published private(set) var footprintFailureRead: Date?
     /// Set by a change no store counts: an uninstall reports itself through `markStale()`.
     @Published private var markedStale = false
     /// The counts the last successful read started from.
     private var changesAtLastRead = InventoryChangeStamp()
 
+    private struct FootprintWork {
+        let id: UUID
+        let task: Task<Void, Never>
+        var windows: [UUID: AsyncStream<Void>.Continuation]
+    }
+
+    private var footprintWork: FootprintWork?
     private let operations: OperationCoordinator
+    private let footprintHistory: InventoryFootprintHistory
+    private let footprintReader: any InventoryFootprintReading
     private let now: @MainActor () -> Date
 
-    init(operations: OperationCoordinator = .shared, now: @escaping @MainActor () -> Date = { .now }) {
+    init(
+        operations: OperationCoordinator = .shared,
+        footprintHistory: InventoryFootprintHistory = .shared,
+        footprintReader: any InventoryFootprintReading = InventoryFootprintReader(),
+        now: @escaping @MainActor () -> Date = { .now }
+    ) {
+        self.footprintHistory = footprintHistory
+        self.footprintReader = footprintReader
         self.operations = operations
         self.now = now
     }
@@ -226,12 +258,64 @@ final class InventoryStore: ObservableObject {
     /// longer claims to be current and the next entry reads again.
     func markStale() { markedStale = true }
 
+    func measureFootprints(for read: Date) async {
+        guard !Task.isCancelled, lastReadAt == read, !isScanning, footprintMeasurement?.readAt != read else { return }
+        let window = UUID()
+        let (completion, signal) = AsyncStream<Void>.makeStream()
+        if footprintWork == nil {
+            footprintFailureRead = nil
+            let task = Task { [apps] in
+                await performFootprintMeasurement(for: read, installations: apps)
+                if footprintWork?.id == window { finishFootprintWork() }
+            }
+            footprintWork = FootprintWork(id: window, task: task, windows: [window: signal])
+        } else {
+            footprintWork?.windows[window] = signal
+        }
+
+        // Each window can stop waiting independently when its view disappears.
+        var iterator = completion.makeAsyncIterator()
+        _ = await iterator.next()
+        if footprintWork?.windows.removeValue(forKey: window) != nil, footprintWork?.windows.isEmpty == true {
+            cancelFootprintWork()
+        }
+    }
+
+    private func finishFootprintWork() {
+        guard let work = footprintWork else { return }
+        footprintWork = nil
+        for window in work.windows.values { window.finish() }
+    }
+
+    private func cancelFootprintWork() {
+        footprintWork?.task.cancel()
+        finishFootprintWork()
+    }
+
+    private func performFootprintMeasurement(for read: Date, installations: [ApplicationInfo]) async {
+        do {
+            let sizes = try await operations.withRead(label: "inventory sizes") { [footprintReader] in
+                try await footprintReader.measure(installations)
+            }
+            try Task.checkCancellation()
+            guard lastReadAt == read, !isScanning else { return }
+            let report = try await footprintHistory.record(sizes, apps: installations, readAt: read)
+            guard lastReadAt == read, !Task.isCancelled else { return }
+            footprintMeasurement = report
+        } catch is CancellationError {
+            return
+        } catch {
+            if lastReadAt == read, !Task.isCancelled { footprintFailureRead = read }
+        }
+    }
+
     func scan(
         using loader: any InventorySnapshotLoading,
         changes: InventoryChangeStamp,
         onWegaState: (@MainActor (WegaState) -> Void)?
     ) async {
         guard !isScanning else { return }
+        cancelFootprintWork()
         isScanning = true
         errorMessage = nil
         // A change that lands while this read runs moves the counts past `changes`, or sets the
@@ -247,6 +331,7 @@ final class InventoryStore: ObservableObject {
             }
             apps = snapshot.apps
             npmGlobals = snapshot.npmGlobals
+            activity = snapshot.activity
             errorMessage = snapshot.failures.scanErrorMessage
             changesAtLastRead = changes
             lastReadAt = now()

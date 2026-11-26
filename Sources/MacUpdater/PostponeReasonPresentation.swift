@@ -2,14 +2,18 @@ import Foundation
 import MacUpdaterCore
 
 extension PostponeReason {
-    var diskShortfall: Int64? {
+    private var diskBudget: UpdateDiskBudget? {
         guard case .insufficientDisk(let required, let available) = self else { return nil }
-        return max(0, max(0, required) - max(0, available))
+        return UpdateDiskBudget(required: required, available: available)
     }
+
+    var diskShortfall: Int64? { diskBudget?.shortfall }
+
+    var updateBannerAction: BannerAction { diskBudget.map { .openCleanup($0) } ?? .openLogs }
 
     var updateBanner: BannerData {
         BannerData(variant: .danger, title: tr("Odkładam pobieranie"), message: localizedMessage,
-                   action: diskShortfall == nil ? .openLogs : .openCleanup)
+                   action: updateBannerAction)
     }
 
     /// The reason in the active language, always ending with the user's next step.

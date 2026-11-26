@@ -166,6 +166,19 @@ the same identifier, Wega counts each bundle separately and leaves out their sha
 data. Protected locations such as app containers are outside this estimate. Unknown
 sizes appear at the end in both directions.
 
+After clicking **Size**, select **Change since last measurement** to see which apps
+grew most. The first measurement establishes a baseline. Click **Refresh Inventory**
+while viewing sizes to take a fresh measurement. Click a change to see how much the
+bundle, caches and application support each grew or shrank. A dash indicates that
+the two measurements could not be compared. This happens for a newly seen copy, an
+unreadable folder, or a total whose treatment of shared data changed. Wega keeps
+the last measurement locally between launches.
+
+Use **Large and last opened 90+ days ago** in the Inventory filters to find apps
+larger than 1 GB that were last opened at least 90 days ago. Each copy uses its own
+Spotlight date. A copy with an unknown date can still be found in the full list.
+Choose **Uninstall…** beside a result to review that installation before confirming.
+
 The **Sprawdzenie** (Check status) column describes an update check of that particular
 installed copy, separately from its Brew/App Store/manual origin. Click the status for
 the sources, last attempt and last complete check. **Wymaga sprawdzenia** (Needs checking)
@@ -595,8 +608,9 @@ opens this guide.
 
 If an update reports insufficient disk space, **Review Cleanup** opens **Cleanup**.
 Use **Scan** to find candidates and review what you want to remove. Moving files to the
-Trash frees space only once you empty it. **Back to Updates** restores your previous
-category. Start the queued updates again to check the available space and continue.
+Trash frees space only once you empty it. Click **Check space again** in Cleanup to see
+how much space is still needed or whether the previous update requirement is met.
+**Back to Updates** restores your previous category. Start the queue when you are ready.
 
 On **Updates**, during an update run and on **Undo updates**, every error banner says what to do
 next and has a button for it. Most of them are **Show in Logs**, which opens **Logs** with the
@@ -1222,6 +1236,11 @@ latest modification. Data changed in the last hour, unverified caches and projec
 containing Swift package checkouts are available for inspection only. Moving eligible
 build data to the Trash includes the project's build logs and test results. Release
 archives have a separate list and open in Finder.
+
+Choose **Simulator runtimes** to see each installed platform and version, including
+runtimes unavailable in the selected Xcode. An empty list, an unavailable toolchain
+and a failed read have different messages. To manage a runtime, open Xcode from the
+list and choose **Xcode → Settings → Components**.
 
 **Tools.** Each report section lists the tools that need a decision first. The rest
 appear under **No action**, collapsed. **⌘F** searches the current view.

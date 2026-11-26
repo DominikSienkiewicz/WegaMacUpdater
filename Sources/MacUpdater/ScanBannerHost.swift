@@ -20,7 +20,7 @@ struct ScanBannerHost: View {
         if let banner = scan.banner {
             BannerView(
                 data: banner,
-                onAction: perform,
+                onAction: { perform($0, from: banner) },
                 onClose: { scan.dismissBanner() }
             )
             .padding(.horizontal, 16)
@@ -28,12 +28,12 @@ struct ScanBannerHost: View {
         }
     }
 
-    private func perform(_ action: BannerAction) {
+    private func perform(_ action: BannerAction, from banner: BannerData) {
         switch action {
         case .openLogs: onNavigate?(.logs)
         case .openCleanup:
-            scan.dismissBanner()
-            onNavigate?(.cleanup)
+            guard let onNavigate, scan.beginCleanupSpaceReview(from: banner) else { return }
+            onNavigate(.cleanup)
         case .openSettings, .openTouchIDCard:
             SettingsRoute.shared.open(.touchID, with: openSettings)
         case .openHelperSettings:

@@ -715,6 +715,11 @@ access to the chosen folder for a shallow scan. The Xcode view separates per-pro
 DerivedData from release archives. Both views support search and sorting, and keep
 their results in memory. The saved Tools report and its exports contain the Tools scan.
 
+**Simulator runtimes** lists the selected Xcode installation's simulator platforms,
+versions and availability separately from its build data. Cleanup also offers **Check
+space again** when opened from a low-space update. It compares the capacity available
+on the update volume with the byte requirement from that attempt.
+
 The scan groups physical application bundles with the same bundle identifier and displays
 each path and version. **Review copies** opens an Uninstall list scoped to the group with
 no selection. Wega rechecks that the chosen bundle and a surviving copy are still present.
@@ -757,8 +762,14 @@ termination, including when a stale confirmation requests force termination.
 ### Inventory
 **Size** measures allocated disk space in the background when you select that column.
 The first click orders installations from largest to smallest. Click a value to see
-the bundle, cache and application support measurements. The [user guide](../USER_GUIDE.md#checking-status-in-inventory)
+the bundle, cache and application support measurements. **Change since last measurement**
+orders comparable totals by growth and shows component changes for installations with
+the same path and bundle identifier. The [user guide](../USER_GUIDE.md#checking-status-in-inventory)
 describes which locations contribute to the estimate.
+
+The **Large and last opened 90+ days ago** filter pairs the size estimate with the
+last-opened date for that installation and opens its uninstall review. Unknown dates
+and sizes are excluded from the filter.
 
 The **Check status** column and **Needs checking** filter expose the latest per-installation
 update-check evidence: current, update available, incomplete, no recognized source,
