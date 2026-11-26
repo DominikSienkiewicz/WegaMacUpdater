@@ -113,21 +113,13 @@ final class FinalQAReviewRegressionTests: XCTestCase {
                 caskToken: "qa-final-\(index)"
             )
         }
-        let ambiguities = targets.map { target in
-            AmbiguousBrewUninstall(
-                bundleIdentifier: target.bundleIdentifier ?? "missing",
-                appName: target.name,
-                caskToken: target.caskToken ?? "missing",
-                locations: [
-                    "/Applications/\(target.name).app",
-                    "/Users/qa/Applications/An intentionally long duplicate location/\(target.name).app",
-                ]
-            )
-        }
+        let keptCopies = Dictionary(uniqueKeysWithValues: targets.map { target in
+            (target.id, [URL(filePath: "/Users/qa/Applications/An intentionally long duplicate location/\(target.name).app")])
+        })
         let hostingView = NSHostingView(
             rootView: UninstallDialog(
                 targets: targets,
-                ambiguities: ambiguities,
+                keptCopies: keptCopies,
                 onCancel: {},
                 onConfirm: { _ in }
             )

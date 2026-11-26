@@ -10,6 +10,8 @@ enum UninstallProtectionPresentation {
             return tr("Aplikacja systemowa macOS — chroniona przez system")
         case .unverifiedDuplicateCopy:
             return tr("Nie można bezpiecznie ustalić, która kopia zostałaby usunięta.")
+        case .unknownInstallationSource:
+            return tr("Nie udało się odczytać listy Homebrew. Odśwież listę, aby ustalić sposób usunięcia.")
         case .symlink(let destination):
             return trf("To tylko dowiązanie do %@", destination)
         }

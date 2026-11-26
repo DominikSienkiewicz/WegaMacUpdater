@@ -12,6 +12,13 @@ extension Translations {
         "Odznacz widoczne": "Deselect visible",
         "Wybrane (%@)": "Selected (%@)",
         "Usuń z wyboru: %@": "Remove from selection: %@",
+        "Nie udało się odczytać listy Homebrew. Odśwież listę, aby ustalić sposób usunięcia.":
+            "The Homebrew list could not be read. Refresh the list to verify how this app can be removed.",
+        "Nie ustalono źródła": "Source unknown",
+        "Wybierz jedną kopię tej aplikacji. Pozostałe kopie i wspólne dane zostaną zachowane.":
+            "Select one copy of this app. Other copies and shared data will be kept.",
+        "Usuniesz": "You will remove",
+        "Zachowasz": "You will keep",
         "Wszystkie aplikacje": "All apps",
         "Brak kolejnej kopii": "No other copy found",
         "W tym skanie nie znaleziono już kilku kopii tej aplikacji.": "This scan found no extra copies of the app.",

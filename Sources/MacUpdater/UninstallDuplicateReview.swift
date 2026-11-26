@@ -3,7 +3,7 @@ import MacUpdaterCore
 
 struct UninstallRemovalOptions: Sendable {
     let zap: Bool
-    let duplicateReview: UninstallDuplicateReview?
+    let copies: UninstallCopyPlan
 }
 
 struct UninstallDuplicateReview: Sendable {

@@ -17,7 +17,8 @@ struct UninstallView: View {
 
     @State private var apps:          [ApplicationInfo] = []
     @State private var duplicateReview: UninstallDuplicateReview?
-    @State private var pendingDuplicateReview: UninstallDuplicateReview?
+    @State private var copyInventory = UninstallCopyPlan()
+    @State private var pendingCopies = UninstallCopyPlan()
     @State private var protections:    [String: UninstallProtection] = [:]
     @State private var selected:       Set<String>       = []
     @State private var search:         String            = ""
@@ -303,11 +304,12 @@ struct UninstallView: View {
         .sheet(isPresented: $showDialog) {
             UninstallDialog(
                 targets:     pendingUninstallTargets,
-                duplicateReview: pendingDuplicateReview != nil,
-                ambiguities: pendingDuplicateReview != nil ? [] : InstallationInventory.ambiguousBrewUninstalls(
-                    selected: pendingUninstallTargets,
-                    among: apps
-                ),
+                duplicateReview: duplicateBundleIdentifier != nil,
+                keptCopies: Dictionary(uniqueKeysWithValues: pendingUninstallTargets.compactMap { app in
+                    if case .blocked = pendingRoutes[app.id] { return nil }
+                    let kept = pendingCopies.keptPaths(for: app)
+                    return kept.isEmpty ? nil : (app.id, kept)
+                }),
                 scanIncomplete: pendingScanIncomplete,
                 leftoverGroups: pendingLeftoverGroups,
                 leftoverCatalogUnavailable: pendingLeftoverCatalogUnavailable,
@@ -360,7 +362,9 @@ struct UninstallView: View {
 
     @ViewBuilder
     private func sourceLabel(_ app: ApplicationInfo) -> some View {
-        if app.isManagedByBrew {
+        if protections[app.id] == .unknownInstallationSource {
+            WegaBadge(label: tr("Nie ustalono źródła"), variant: .manual)
+        } else if app.isManagedByBrew {
             WegaBadge(label: "brew", variant: .brew)
         } else if app.isManagedByMas {
             WegaBadge(label: "mas", variant: .appStore)
@@ -408,19 +412,19 @@ struct UninstallView: View {
         isPreparingDialog = true
         defer { isPreparingDialog = false }
         pendingUninstallTargets = targets
-        pendingDuplicateReview = duplicateReview
+        let copies = copyInventory.selecting(targets)
+        pendingCopies = copies
         pendingScanIncomplete = scanFailed
         // Read together before any wait: a scan finishing during one would otherwise pair its
         // partial list with the earlier scan's "complete" flag.
         let installed = apps
         let applicationsIncomplete = applicationsSourceFailed
-        pendingRoutes = await operations.routes(for: targets)
+        pendingRoutes = await operations.routes(for: targets, copies: copies)
         // A blocked target is not attempted: it is neither asked to quit nor offers leftovers.
-        let attempted = UninstallQuitFlow.partition(targets: targets, routes: pendingRoutes).attempt
-        pendingRunningStates = operations.runningStates(for: attempted)
-        let leftovers = pendingDuplicateReview == nil
-            ? await operations.scanLeftovers(for: attempted, installed: installed)
-            : LeftoverScan(groups: [], catalogUnavailable: false)
+        let removable = UninstallQuitFlow.partition(targets: targets, routes: pendingRoutes).attempt
+        pendingRunningStates = operations.runningStates(for: removable)
+        let attempted = removable.filter { !copies.preservesData(for: $0) }
+        let leftovers = await operations.scanLeftovers(for: attempted, installed: installed)
         pendingLeftoverGroups = leftovers.groups
         pendingLeftoverCatalogUnavailable = leftovers.catalogUnavailable
         pendingApplicationsIncomplete = applicationsIncomplete
@@ -431,7 +435,7 @@ struct UninstallView: View {
     private func cancelUninstall() {
         showDialog = false
         pendingUninstallTargets = []
-        pendingDuplicateReview = nil
+        pendingCopies = UninstallCopyPlan()
         pendingScanIncomplete = false
         pendingLeftoverGroups = []
         pendingLeftoverCatalogUnavailable = false
@@ -460,14 +464,14 @@ struct UninstallView: View {
         routes: [String: UninstallRouteDecision],
         zap: Bool,
         leftovers: [LeftoverGroup],
-        duplicateReview: UninstallDuplicateReview?
+        copies: UninstallCopyPlan
     ) async {
         defer { operations.endQuitPhase() }
-        guard let plan = await operations.runQuitPhase(targets: targets, routes: routes, askForceQuit: askForceQuit)
+        guard let plan = await operations.runQuitPhase(targets: targets, routes: routes, copies: copies, askForceQuit: askForceQuit)
         else { return }
         await uninstall(
             targets: plan.remove, leftovers: leftovers, skipped: plan.skipped, reported: targets,
-            options: UninstallRemovalOptions(zap: zap, duplicateReview: duplicateReview)
+            options: UninstallRemovalOptions(zap: zap, copies: copies)
         )
     }
 
@@ -475,14 +479,14 @@ struct UninstallView: View {
         guard operations.beginQuitPhase() else { return }
         let targets = pendingUninstallTargets
         let routes = pendingRoutes
-        let duplicateReview = pendingDuplicateReview
+        let copies = pendingCopies
         let leftovers = pendingLeftoverGroups.compactMap { group -> LeftoverGroup? in
             let consented = group.items.filter { selectedLeftovers.contains($0.url.path) }
             return consented.isEmpty ? nil : LeftoverGroup(app: group.app, items: consented)
         }
         showDialog = false
         pendingUninstallTargets = []
-        pendingDuplicateReview = nil
+        pendingCopies = UninstallCopyPlan()
         pendingScanIncomplete = false
         pendingLeftoverGroups = []
         pendingLeftoverCatalogUnavailable = false
@@ -492,8 +496,8 @@ struct UninstallView: View {
         selectedLeftovers = []
         Task {
             await quitThenUninstall(
-                targets: targets, routes: routes, zap: zap && duplicateReview == nil,
-                leftovers: leftovers, duplicateReview: duplicateReview
+                targets: targets, routes: routes, zap: zap,
+                leftovers: leftovers, copies: copies
             )
         }
     }
@@ -509,6 +513,7 @@ struct UninstallView: View {
         guard let scan = await operations.scan(using: model.brewService) else { return }
         apps = scan.apps
         protections = scan.protections
+        copyInventory = scan.copies
         if let duplicateBundleIdentifier {
             applyDuplicateReview(duplicateBundleIdentifier, to: scan)
         } else if let preselection, let onReviewPreselectedCopies,
@@ -527,15 +532,8 @@ struct UninstallView: View {
     }
 
     private func applyDuplicateReview(_ bundleIdentifier: String, to scan: UninstallScan) {
-        let review = UninstallDuplicateReview(
-            bundleIdentifier: bundleIdentifier, apps: scan.apps,
-            scanComplete: !scan.scanFailed, brewPrefix: BinaryLocator().locateBrewPrefix()
-        )
-        duplicateReview = review
-        for app in review.visibleApps where protections[app.id] == nil && review.target(for: app) == nil {
-            protections[app.id] = .unverifiedDuplicateCopy
-        }
-        selected.formIntersection(review.visibleApps.filter { protections[$0.id] == nil }.map(\.id))
+        duplicateReview = scan.copies.review(for: bundleIdentifier)
+        selected.formIntersection(appRows.filter { protections[$0.id] == nil }.map(\.id))
     }
 
     /// - Parameter reported: every confirmed target, in confirmation order; each one ends in
@@ -570,7 +568,7 @@ struct UninstallView: View {
             zap: zap,
             leftovers: leftovers,
             skipped: skipped,
-            duplicateReview: options.duplicateReview,
+            copies: options.copies,
             using: model.brewService
         )
         inventory.markStale()
@@ -606,9 +604,8 @@ struct UninstallView: View {
 struct UninstallDialog: View {
     let targets: [ApplicationInfo]
     let duplicateReview: Bool
-    /// REL-16: casks whose application is installed in more than one place — see
-    /// `InstallationInventory.ambiguousBrewUninstalls`.
-    let ambiguities: [AmbiguousBrewUninstall]
+    let keptCopies: [String: [URL]]
+    var preservedCopyIDs: Set<String> { Set(keptCopies.keys) }
     /// REL-14: the scan behind these targets failed to read one or more sources, so the
     /// list may be missing installations. The dialog warns before the destructive action.
     var scanIncomplete: Bool = false
@@ -636,7 +633,7 @@ struct UninstallDialog: View {
     init(
         targets: [ApplicationInfo],
         duplicateReview: Bool = false,
-        ambiguities: [AmbiguousBrewUninstall],
+        keptCopies: [String: [URL]] = [:],
         scanIncomplete: Bool = false,
         leftoverGroups: [LeftoverGroup] = [],
         leftoverCatalogUnavailable: Bool = false,
@@ -651,7 +648,7 @@ struct UninstallDialog: View {
     ) {
         self.targets = targets
         self.duplicateReview = duplicateReview
-        self.ambiguities = ambiguities
+        self.keptCopies = keptCopies
         self.scanIncomplete = scanIncomplete
         self.leftoverGroups = leftoverGroups
         self.leftoverCatalogUnavailable = leftoverCatalogUnavailable
@@ -781,10 +778,14 @@ struct UninstallDialog: View {
                             ForEach(targets) { app in
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(app.name).font(.wega(.callout, weight: .medium))
-                                    Text(app.path.path)
-                                        .font(.wega(.footnote, monospaced: true))
-                                        .foregroundStyle(.secondary)
-                                        .textSelection(.enabled)
+                                    if let kept = keptCopies[app.id], !kept.isEmpty {
+                                        Text(tr("Usuniesz")).font(.wega(.footnote, weight: .semibold))
+                                        copyPath(app.path)
+                                        Text(tr("Zachowasz")).font(.wega(.footnote, weight: .semibold))
+                                        ForEach(kept, id: \.self) { path in copyPath(path) }
+                                    } else {
+                                        copyPath(app.path)
+                                    }
                                     if let routeNote = Self.routeNote(for: routes[app.id]) {
                                         Text(routeNote)
                                             .font(.wega(.footnote))
@@ -846,44 +847,6 @@ struct UninstallDialog: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 22)
                         .padding(.top, 10)
-                    }
-
-                    if !ambiguities.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            ForEach(ambiguities) { item in
-                                HStack(alignment: .top, spacing: 8) {
-                                    Image(systemName: "exclamationmark.triangle.fill")
-                                        .foregroundStyle(Color.wegaDanger)
-                                        .font(.wega(.body))
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(tr("Homebrew usunie swoją kopię"))
-                                            .font(.wega(.callout, weight: .semibold))
-                                        Text(trf(
-                                            "%@ jest zainstalowany w %@ miejscach: %@. Homebrew usunie kopię, którą sam zarządza (brew uninstall %@) — niekoniecznie tę zaznaczoną.",
-                                            "\(item.appName)",
-                                            "\(item.locations.count)",
-                                            "\(item.locations.joined(separator: ", "))",
-                                            "\(item.caskToken)"
-                                        ))
-                                        .font(.wega(.subheadline))
-                                        .foregroundStyle(.secondary)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                    }
-                                    Spacer(minLength: 0)
-                                }
-                            }
-                        }
-                        .padding(12)
-                        .background(
-                            Color.wegaDanger.opacity(0.06),
-                            in: RoundedRectangle(cornerRadius: 10)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(Color.wegaDanger.opacity(0.28), lineWidth: 1)
-                        )
-                        .padding(.horizontal, 22)
-                        .padding(.top, brewCount > 0 ? 12 : 0)
                     }
 
                     if hasNonBrew {
@@ -964,6 +927,13 @@ struct UninstallDialog: View {
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.wegaHairline, lineWidth: 1))
         .shadow(color: .black.opacity(0.5), radius: 40, y: 12)
         .frame(width: 480)
+    }
+
+    private func copyPath(_ url: URL) -> some View {
+        Text(url.path)
+            .font(.wega(.footnote, monospaced: true))
+            .foregroundStyle(.secondary)
+            .textSelection(.enabled)
     }
 
     private func confirm() {
