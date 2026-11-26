@@ -28,6 +28,21 @@ struct InventoryView: View {
     @State private var filter:       SourceFilter      = .all
     @State private var sortKey:      InventorySortKey  = .name
     @State private var sortAsc:      Bool              = true
+    @State private var footprints: [InstallationIdentity: InventoryFootprint] = [:]
+    @State private var measuredRead: Date?
+
+    private var footprintScope: String {
+        tr("Szacunek obejmuje aplikację oraz przypisane jej foldery Caches i Application Support.")
+    }
+
+    private var measurementRequest: Date? {
+        sortKey == .diskUsage && !isScanning && !apps.isEmpty ? inventory.lastReadAt : nil
+    }
+
+    private var currentFootprints: [InstallationIdentity: InventoryFootprint] {
+        measuredRead == inventory.lastReadAt ? footprints : [:]
+    }
+
     /// UX-11f — set when a chosen export destination cannot be written; shown as a banner.
     @State private var exportError:  String?           = nil
     /// ⌘F and ⇧⌘F („Znajdź w spisie aplikacji”) focus the search field below.
@@ -83,12 +98,19 @@ struct InventoryView: View {
                 return app.name.localizedCaseInsensitiveContains(search)
                     || (app.bundleIdentifier?.localizedCaseInsensitiveContains(search) ?? false)
             }
-        return InventorySort.sorted(matching, by: sortKey, ascending: sortAsc)
+        return InventorySort.sorted(matching, by: sortKey, ascending: sortAsc, footprints: currentFootprints)
     }
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
             content(now: context.date)
+        }
+        .task(id: measurementRequest) {
+            guard let read = measurementRequest, measuredRead != read,
+                  let result = try? await InventoryFootprintReader().measure(apps),
+                  !Task.isCancelled, measurementRequest == read else { return }
+            footprints = result
+            measuredRead = read
         }
     }
 
@@ -177,6 +199,21 @@ struct InventoryView: View {
                 ErrorBanner(message: exportError).padding(.horizontal, 16).padding(.bottom, 8)
             }
 
+            if sortKey == .diskUsage {
+                HStack {
+                    if let read = measurementRequest, measuredRead != read {
+                        ProgressView().controlSize(.small)
+                            .accessibilityLabel(tr("Obliczanie rozmiarów aplikacji"))
+                    }
+                    Text(footprintScope)
+                    Spacer()
+                }
+                .font(.wega(.footnote))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
+            }
+
             // Table header
             WegaCard(padded: false) {
                 ProportionalHStack(weights: InventoryRow.columnWeights, spacing: InventoryRow.columnSpacing) {
@@ -184,6 +221,8 @@ struct InventoryView: View {
                     SortHeaderCell(label: tr("Wersja"),      key: .version,    sortKey: $sortKey, sortAsc: $sortAsc)
                     SortHeaderCell(label: "Bundle ID",   key: .bundleId,   sortKey: $sortKey, sortAsc: $sortAsc)
                     SortHeaderCell(label: tr("Źródło"),      key: .source,     sortKey: $sortKey, sortAsc: $sortAsc)
+                    SortHeaderCell(label: tr("Rozmiar"), key: .diskUsage, sortKey: $sortKey, sortAsc: $sortAsc)
+                        .help(tr("Zmierz zajęte miejsce i posortuj aplikacje od największej.") + " " + footprintScope)
                     SortHeaderCell(label: tr("Aktualizacja"),key: .updateDate, sortKey: $sortKey, sortAsc: $sortAsc)
                     Text(tr("Sprawdzenie")).font(.wega(.footnote, weight: .semibold))
                 }
@@ -224,11 +263,11 @@ struct InventoryView: View {
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 0) {
-                            ForEach(rows.indices, id: \.self) { i in
-                                let app = rows[i]
+                            ForEach(Array(rows.enumerated()), id: \.element.id) { i, app in
                                 InventoryRow(
                                     app: app,
                                     isAlt: i % 2 == 1,
+                                    footprint: currentFootprints[app.installation],
                                     showsLocation: app.bundleIdentifier.map(ambiguousBundleIds.contains) ?? false,
                                     checkPresentation: presentation(for: app, checks: checks, now: now)
                                 )
@@ -480,7 +519,7 @@ private struct SortHeaderCell: View {
     var body: some View {
         Button {
             if sortKey == key { sortAsc.toggle() }
-            else { sortKey = key; sortAsc = true }
+            else { sortKey = key; sortAsc = key.initiallyAscending }
         } label: {
             HStack(spacing: 4) {
                 Text(label)
@@ -503,6 +542,7 @@ private struct SortHeaderCell: View {
 private struct InventoryRow: View {
     let app:   ApplicationInfo
     let isAlt: Bool
+    let footprint: InventoryFootprint?
     /// REL-16: only shown for an app installed in more than one place — an
     /// unambiguous row doesn't need its folder spelled out.
     var showsLocation: Bool = false
@@ -511,7 +551,7 @@ private struct InventoryRow: View {
     @State private var hovered = false
 
     /// Column weights, shared with the table header so the two never drift apart.
-    static let columnWeights: [CGFloat] = [1.5, 0.6, 1.0, 0.8, 1.0, 1.5]
+    static let columnWeights: [CGFloat] = [1.5, 0.6, 0.95, 0.8, 0.75, 1.0, 1.4]
     static let columnSpacing: CGFloat = 12
 
     /// Row background: hover wins, otherwise alternating rows get a faint tint.
@@ -586,6 +626,9 @@ private struct InventoryRow: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+
+            InventoryFootprintCell(footprint: footprint)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             // Update date
             UpdateDateCell(date: app.updateDate)

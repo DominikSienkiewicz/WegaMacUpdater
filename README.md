@@ -315,6 +315,9 @@ Cleanup lists distinct copies of an application by bundle identifier, path, and 
 From there you can review the copies and choose one to uninstall with its shared app data
 preserved. Links to an existing copy count as part of that installation.
 
+In Inventory, click **Size** to measure and sort installations from largest to smallest.
+Click a result for the bundle, cache and application support breakdown.
+
 Cask repair checks version and build changes before recording success. Homebrew and
 Discord's own updater can both act on the same bundle. Wega verifies Discord Stable on
 disk because an unattended launch can trigger a downgrade. When another app has a
