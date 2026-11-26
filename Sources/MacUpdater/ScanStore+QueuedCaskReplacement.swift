@@ -123,6 +123,6 @@ extension ScanStore {
         let reasons = blocked.filter { selected.contains($0.item.key) }.compactMap(\.postponeReason)
         guard let worst = reasons.max(by: { ($0.diskShortfall ?? 0) < ($1.diskShortfall ?? 0) }) else { return }
         showStickyBanner(BannerData(variant: .danger, title: tr("Odkładam pobieranie"),
-                                    message: worst.localizedMessage, action: .openCleanup))
+                                    message: worst.localizedMessage, action: worst.updateBannerAction))
     }
 }

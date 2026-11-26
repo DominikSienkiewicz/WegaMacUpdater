@@ -155,7 +155,10 @@ struct DetailColumn: View {
             }
             .onChange(of: selection) { _, destination in
                 if destination != .uninstall { duplicateReviewBundleIdentifier = nil }
-                if destination != .cleanup { cleanupReturnFilter = nil }
+                if destination != .cleanup {
+                    cleanupReturnFilter = nil
+                    scan.endCleanupSpaceReview()
+                }
             }
             .onChange(of: holdsBall, initial: true) { _, held in wegaAttentionHeld = held }
     }
@@ -249,6 +252,13 @@ struct DetailColumn: View {
                             onNavigate(.uninstall)
                         }
                     )
+                    .safeAreaInset(edge: .top, spacing: 0) {
+                        if cleanupReturnFilter != nil, let review = scan.cleanupSpaceReview {
+                            CleanupSpaceRecheckCard(review: review) {
+                                Task { await scan.recheckCleanupSpace(review.id) }
+                            }
+                        }
+                    }
                     .toolbar {
                         if let filter = cleanupReturnFilter {
                             ToolbarItem {
