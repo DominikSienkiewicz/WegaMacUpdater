@@ -608,6 +608,11 @@ just because the items that did report all passed.
 
 #### Error banners say what to do next
 
+A foreground cask update blocked by the disk check shows the estimated additional space
+needed. **Review Cleanup** opens Cleanup and **Back to Updates** restores the previous
+update filter. A retry checks capacity again. If a mixed run already updated some apps,
+only still-offered replacements held for insufficient space stay selected.
+
 On Updates, during an update run and on Undo updates, every error banner carries a button. Most
 are **Show in Logs**, which opens Logs on the entry that explains the failure; a failure of macOS permission leads with the permission, offers
 **Open privacy settings** and never points at Logs, and a developer-signature change offers
@@ -745,6 +750,11 @@ Docker migration uses the controlled Desktop shutdown gate instead of generic fo
 termination, including when a stale confirmation requests force termination.
 
 ### Inventory
+**Size** measures allocated disk space in the background when you select that column.
+The first click orders installations from largest to smallest. Click a value to see
+the bundle, cache and application support measurements. The [user guide](../USER_GUIDE.md#checking-status-in-inventory)
+describes which locations contribute to the estimate.
+
 The **Check status** column and **Needs checking** filter expose the latest per-installation
 update-check evidence: current, update available, incomplete, no recognized source,
 policy-hidden, unconfirmed or stale. Details include sources, attempt time and the last

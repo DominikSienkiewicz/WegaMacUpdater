@@ -84,6 +84,7 @@ struct DetailColumn: View {
     @State private var inspectorDialogOpen = false
     /// ⌘F's query on Updates (UXP-35). `UpdatesSearchField` empties it when Updates goes off screen.
     @State private var updatesSearch = ""
+    @State private var cleanupReturnFilter: UpdateFilter?
 
     private var holdsBall: Bool {
         WegaAttention.holdsBall(bannerVariant: scan.banner?.variant, isUpdating: scan.updating, dialogOpen: dialogOpen || inspectorDialogOpen)
@@ -154,6 +155,7 @@ struct DetailColumn: View {
             }
             .onChange(of: selection) { _, destination in
                 if destination != .uninstall { duplicateReviewBundleIdentifier = nil }
+                if destination != .cleanup { cleanupReturnFilter = nil }
             }
             .onChange(of: holdsBall, initial: true) { _, held in wegaAttentionHeld = held }
     }
@@ -178,6 +180,7 @@ struct DetailColumn: View {
     /// banner is pointing at.
     private func navigate(fromBanner tab: SidebarTab) {
         if tab == .logs { logsInitialFilter = .errorsOnly; logsErrorBadge = 0 }
+        if tab == .cleanup { cleanupReturnFilter = selection.filter ?? .all }
         onNavigate(SidebarSelection.forTab(tab))
     }
 
@@ -246,6 +249,16 @@ struct DetailColumn: View {
                             onNavigate(.uninstall)
                         }
                     )
+                    .toolbar {
+                        if let filter = cleanupReturnFilter {
+                            ToolbarItem {
+                                Button { onNavigate(.updates(filter)) } label: {
+                                    Label(tr("Wróć do aktualizacji"), systemImage: "arrow.backward")
+                                }
+                                .labelStyle(.titleAndIcon)
+                            }
+                        }
+                    }
                 case .migration:
                     MigrationView(onWegaState: { wegaState = $0 }, onNavigate: navigate(fromBanner:))
                 case .inventory:

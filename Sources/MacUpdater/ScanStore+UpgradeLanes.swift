@@ -32,6 +32,7 @@ extension ScanStore {
         let validation: CaskValidationVerdict?
         let publisherVeto: TeamIDAudit?
         let operationID: UUID?
+        var postponeReason: PostponeReason?
 
         init(item: OutdatedItem, outcome: BrewUpgradeOutcome?, validation: CaskValidationVerdict? = nil,
              publisherVeto: TeamIDAudit? = nil, operationID: UUID? = nil) {

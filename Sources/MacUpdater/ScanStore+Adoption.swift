@@ -55,6 +55,7 @@ extension ScanStore {
             return
         }
         defer { dependencies.upgradeMutex.release() }
+        clearDiskSpaceBanner()
         manualBusy = token
         defer { manualBusy = nil }
         let ticket = MutationGuard.shared.begin(trf("instalacja %@", "\(token)"))
@@ -114,8 +115,7 @@ extension ScanStore {
         case .resourcePostponed(let reason):
             UpdateDiagnostics.record("adoption.deferred", fields: ["token": token, "reason": "resources", "detail": String(describing: reason)])
             brewLog.append(reason.logLine)
-            showBanner(BannerData(variant: .danger, title: tr("Odkładam pobieranie"),
-                                  message: reason.localizedMessage, action: .openLogs))
+            showBanner(reason.updateBanner)
             emitActivitySignal(.error)
             return
         case .publisherRejected(let old, let new):

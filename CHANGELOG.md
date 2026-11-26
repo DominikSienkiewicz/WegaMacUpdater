@@ -14,6 +14,12 @@ them verbatim under the new version heading, so that step is never done by hand 
 
 ## [Unreleased]
 
+### Added
+- An update held for insufficient disk space shows how much more space it needs and
+  offers **Review Cleanup**, with a way back to the queued updates.
+- Inventory can sort installed applications by estimated disk usage. Select **Size**
+  to measure, then click a result to see what contributes to it.
+
 ## [0.10.1] — 2026-11-25
 
 ### Added
