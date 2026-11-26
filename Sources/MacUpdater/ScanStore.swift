@@ -162,6 +162,7 @@ final class ScanStore: ObservableObject {
     @Published var installationChecks: [InstallationCheck] = []
     @Published var lastCheck:         Date?
     @Published private(set) var banners = BannerQueue<BannerData>()
+    @Published var cleanupSpaceReview: CleanupSpaceReview?
     @Published var restartCandidates: [RestartInfo]       = []
     var restartDiagnosticOperationIDs: [String: UUID] = [:]
     var restartDockerBundleURLs: [String: URL] = [:]
@@ -909,7 +910,8 @@ final class ScanStore: ObservableObject {
     }
 
     func clearDiskSpaceBanner() {
-        banners.removeAll { $0.action == .openCleanup }
+        banners.removeAll { $0.action?.cleanupBudget != nil }
+        endCleanupSpaceReview()
     }
 
     func emitWegaState(_ state: WegaState) {

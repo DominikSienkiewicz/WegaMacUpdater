@@ -723,7 +723,8 @@ func selectionToggleBinding(
 enum BannerAction: Equatable {
     /// Z14: the helper card in Settings.
     case openHelperSettings
-    case openLogs, openCleanup, openSettings, openAppManagementSettings
+    case openLogs, openSettings, openAppManagementSettings
+    case openCleanup(UpdateDiskBudget)
     /// The Touch ID card, for its recoveryOS note rather than to turn Touch ID on (owner decision
     /// 2026-11-21: while that note shows, Touch ID is no advice).
     case openTouchIDCard

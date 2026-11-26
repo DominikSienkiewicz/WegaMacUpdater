@@ -107,7 +107,7 @@ struct QueuedCaskReplacementTests {
 
         store.finishReplacementSelection([row])
         #expect(store.selected == [replacement.key])
-        #expect(store.banner?.action == .openCleanup)
+        #expect(store.banner?.action == .openCleanup(UpdateDiskBudget(required: 5_000_000_000, available: 2_000_000_000)))
         store.dismissBanner()
 
         store.manualOutdated = []

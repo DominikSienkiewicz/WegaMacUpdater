@@ -5,7 +5,9 @@ public enum DiskResourceProbe {
     /// Capacity available for an important user-initiated operation on the volume where
     /// snapshots are created. Returning `nil` is a hard-gate result, never an implicit pass.
     public static func availableBytes(at url: URL = FileManager.default.temporaryDirectory) -> Int64? {
-        try? url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+        var volume = url
+        volume.removeCachedResourceValue(forKey: .volumeAvailableCapacityForImportantUsageKey)
+        return try? volume.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
             .volumeAvailableCapacityForImportantUsage
     }
 
