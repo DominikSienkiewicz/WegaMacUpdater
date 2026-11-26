@@ -28,7 +28,7 @@ struct UninstallView: View {
     @EnvironmentObject private var inventory: InventoryStore
     private let announcer: any AccessibilityAnnouncing = LiveAccessibilityAnnouncer()
     @State private var showDialog:     Bool              = false
-    /// UX-01: the exact visible installations named by the confirmation. Execution
+    /// UX-01: the exact installations named by the confirmation. Execution
     /// consumes this frozen collection instead of resolving selection through a filter
     /// for a second time after consent.
     @State private var pendingUninstallTargets: [ApplicationInfo] = []
@@ -99,7 +99,11 @@ struct UninstallView: View {
     }
 
     private var targets: [ApplicationInfo] {
-        UninstallSelection.targets(filtered: filtered, selected: selected, protections: protections)
+        UninstallSelection.targets(filtered: appRows, selected: selected, protections: protections)
+    }
+
+    private var visibleSelectedCount: Int {
+        UninstallSelection.targets(filtered: filtered, selected: selected, protections: protections).count
     }
 
     private var selectableCount: Int {
@@ -157,21 +161,23 @@ struct UninstallView: View {
                     HStack(spacing: 10) {
                         if duplicateBundleIdentifier == nil {
                             Button(action: toggleAll) {
-                                Image(systemName: selectAllSymbol)
-                                    .foregroundStyle(targets.isEmpty ? .secondary : Color.wegaHoney)
-                                    .font(.wega(.title3))
+                                Label(
+                                    visibleSelectedCount > 0 && visibleSelectedCount == selectableCount
+                                        ? tr("Odznacz widoczne") : tr("Zaznacz widoczne"),
+                                    systemImage: selectAllSymbol
+                                )
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel(tr("Zaznacz wszystko"))
+                            .disabled(selectableCount == 0 || isLoading || isPreparingDialog || isUninstalling)
                             .accessibilityValue(
-                                trf("%@ z %@ zaznaczonych", "\(targets.count)", "\(selectableCount)")
+                                trf("%@ z %@ zaznaczonych", "\(visibleSelectedCount)", "\(selectableCount)")
                             )
                         }
-                        Text(targets.isEmpty
-                             ? trp("%@ aplikacji", filtered.count)
-                             : trf("%@ z %@ zaznaczonych", "\(targets.count)", "\(selectableCount)"))
+                        Text(trp("%@ aplikacji", filtered.count))
                             .font(.wega(.callout))
                             .foregroundStyle(.secondary)
+                        UninstallSelectionBasket(apps: targets) { selected.remove($0) }
+                            .disabled(isLoading || isPreparingDialog || isUninstalling)
                         Spacer()
                         Text(tr("NAZWA · WERSJA · ŹRÓDŁO"))
                             .font(.wega(.footnote, monospaced: true))
@@ -219,6 +225,8 @@ struct UninstallView: View {
                         message: duplicateBundleIdentifier == nil ? tr("Nie znaleziono żadnych zainstalowanych aplikacji.")
                             : tr("W tym skanie nie znaleziono już kilku kopii tej aplikacji.")
                     )
+                } else if filtered.isEmpty {
+                    ContentUnavailableView.search(text: search)
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 0) {
@@ -263,7 +271,7 @@ struct UninstallView: View {
                                     .contentShape(Rectangle())
                                 }
                                 .toggleStyle(WegaCheckboxToggleStyle())
-                                .disabled(protection != nil)
+                                .disabled(protection != nil || isUninstalling || isPreparingDialog)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 9)
                                 .background(isSelected ? Color.wegaDanger.opacity(0.06) : Color.clear)
@@ -320,9 +328,6 @@ struct UninstallView: View {
             content: { UninstallForceQuitSheet(apps: forceQuitApps, onChoice: answerForceQuit) }
         )
         .wegaAttention(showDialog || showForceQuit || scanError != nil)
-        .onChange(of: search) { _, _ in
-            selected.formIntersection(filtered.map(\.id))
-        }
         .task(id: duplicateBundleIdentifier) {
             selected.removeAll()
             duplicateReview = nil
@@ -370,6 +375,7 @@ struct UninstallView: View {
     }
 
     private func toggle(_ id: String) {
+        guard !isUninstalling, !isPreparingDialog, !isLoading else { return }
         if selected.contains(id) { selected.remove(id) }
         else if duplicateBundleIdentifier != nil { selected = [id] }
         else { selected.insert(id) }
@@ -391,9 +397,7 @@ struct UninstallView: View {
 
     private func toggleAll() {
         guard duplicateBundleIdentifier == nil else { return }
-        let selectableIds = UninstallSelection.selectAll(filtered: filtered, protections: protections)
-        if Set(targets.map(\.id)) == selectableIds { selected.removeAll() }
-        else { selected = selectableIds }
+        selected = UninstallSelection.togglingVisible(filtered, in: selected, protections: protections)
     }
 
     /// UX-13: freezes the confirmation targets (UX-01), then plans their home-folder
@@ -515,6 +519,7 @@ struct UninstallView: View {
             onReviewPreselectedCopies(id)
             return
         }
+        selected.formIntersection(UninstallSelection.selectAll(filtered: appRows, protections: protections))
         if let preselection {
             selected = UninstallSelection.preselection(for: preselection, in: appRows, protections: protections)
             onPreselectionUsed()

@@ -18,6 +18,13 @@ enum UninstallSelection {
         Set(selectable(filtered, protections: protections).map(\.id))
     }
 
+    static func togglingVisible(
+        _ apps: [ApplicationInfo], in selected: Set<String>, protections: [String: UninstallProtection]
+    ) -> Set<String> {
+        let visible = selectAll(filtered: apps, protections: protections)
+        return selected.isSuperset(of: visible) ? selected.subtracting(visible) : selected.union(visible)
+    }
+
     static func targets(
         filtered: [ApplicationInfo],
         selected: Set<String>,
