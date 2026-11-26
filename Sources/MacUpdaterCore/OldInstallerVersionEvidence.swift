@@ -9,6 +9,7 @@ enum OldInstallerVersionEvidence {
         let url: URL
         let id: String
         let version: String
+        let build: String?
     }
 
     private static let timeout = ProcessTimeoutPolicy(deadline: 1, idle: 1)
@@ -60,11 +61,15 @@ enum OldInstallerVersionEvidence {
                   let id = bundle.attribute(forName: "id")?.stringValue, MigrationPlanner.isSafeBundleID(id),
                   let version = bundle.attribute(forName: "CFBundleShortVersionString")?.stringValue,
                   !version.isEmpty, version.utf8.count <= 64, version.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) }) else { return nil }
-            return DeclaredApp(url: applications.appending(component: name, directoryHint: .isDirectory), id: id, version: version)
+            let build = bundle.attribute(forName: "CFBundleVersion")?.stringValue
+            guard build?.isEmpty != true else { return nil }
+            return DeclaredApp(url: applications.appending(component: name, directoryHint: .isDirectory), id: id, version: version, build: build)
         }
         guard candidates.count == 1, let app = candidates.first,
               let info = bundleInfo(at: app.url), info["CFBundleIdentifier"] as? String == app.id,
-              info["CFBundleShortVersionString"] as? String == app.version, matchesPublisher(app.url, app.id, packageTeam) else { return nil }
+              info["CFBundleShortVersionString"] as? String == app.version,
+              app.build == nil || info["CFBundleVersion"] as? String == app.build,
+              matchesPublisher(app.url, app.id, packageTeam) else { return nil }
         return app.version
     }
 
