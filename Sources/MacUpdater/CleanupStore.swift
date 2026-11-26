@@ -88,6 +88,10 @@ struct CleanupStoreDependencies {
 /// the re-key destroys the view tree, and a running scan or removal must outlive it.
 @MainActor
 final class CleanupStore: ObservableObject {
+    @Published var filePage = CleanupPage.tools
+    lazy var installerReview = CleanupFileReviewStore(coordinator: dependencies.coordinator)
+    lazy var xcodeReview = CleanupFileReviewStore(coordinator: dependencies.coordinator)
+
     enum Phase: Equatable {
         case idle
         case readingPath

@@ -1195,7 +1195,23 @@ file can be removed.
 
 ### Cleanup: what each action does
 
-Each **Cleanup** section lists the tools that need a decision first; the rest is under **No action**, collapsed. **⌘F** searches tools and paths across the whole report and shows every match expanded.
+**Old installers.** Click **Choose Folder…** and select a folder such as Downloads.
+Wega lists regular `.dmg` and `.pkg` files directly inside it. The default filter shows
+files last modified at least 30 days ago. Choose **All** to include recent downloads.
+Sort by size or modification date, then use the Finder button to inspect a file or
+the Trash button to review and confirm the move. Cloud-only files are skipped. A signed
+component package can show **Installed version** when its metadata and publisher match
+the installed app, including the build number if the package declares one.
+
+**Xcode cleanup.** Click **Scan** to review the standard `DerivedData` and `Archives`
+folders in `~/Library/Developer/Xcode`. Each project shows its build data, size and
+latest modification. Data changed in the last hour, unverified caches and projects
+containing Swift package checkouts are available for inspection only. Moving eligible
+build data to the Trash includes the project's build logs and test results. Release
+archives have a separate list and open in Finder.
+
+**Tools.** Each report section lists the tools that need a decision first. The rest
+appear under **No action**, collapsed. **⌘F** searches the current view.
 
 **Apps installed in several locations** shows separate copies with their paths and
 versions. Choose **Review copies…**, select one copy in **Uninstall**, and confirm.

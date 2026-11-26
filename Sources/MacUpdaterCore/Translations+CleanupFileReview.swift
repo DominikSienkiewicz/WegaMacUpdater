@@ -1,0 +1,35 @@
+import Foundation
+
+extension Translations {
+    static let cleanupFileReview: [String: String] = [
+        "Stare instalatory": "Old installers",
+        "Porządki po Xcode": "Xcode cleanup",
+        "Szukaj pliku lub projektu…": "Find a file or project…",
+        "Przeniesiono do Kosza: %@": "Moved to Trash: %@",
+        "Wybierz folder, aby przejrzeć zapisane w nim pliki .dmg i .pkg.": "Choose a folder to review its .dmg and .pkg files.",
+        "Skan pokaże dane kompilacji projektów i archiwa wydań ze standardowych folderów Xcode.": "Scan the standard Xcode folders to review project build data and release archives.",
+        "Do Kosza trafi wybrany instalator.": "The selected installer will move to the Trash.",
+        "Do Kosza trafi katalog danych kompilacji wraz z logami i wynikami testów. Xcode ponownie zbuduje projekt przy kolejnym użyciu.": "The build data folder, including logs and test results, will move to the Trash. Xcode will rebuild the project the next time you use it.",
+        "Skan anulowany. Możesz ponowić skan.": "Scan cancelled. You can scan again.",
+        "Przenieść „%@” do Kosza?": "Move “%@” to the Trash?",
+        "Wybierz folder…": "Choose Folder…",
+        "Wybierz folder": "Choose Folder",
+        "Wiek instalatorów": "Installer age",
+        "Co najmniej 30 dni": "At least 30 days",
+        "Sortowanie": "Sort order",
+        "Największe najpierw": "Largest first",
+        "Najstarsze najpierw": "Oldest first",
+        "Brak pasujących pozycji.": "No matching items.",
+        "Nie znaleziono danych projektów ani archiwów Xcode.": "No project build data or Xcode archives found.",
+        "Brak instalatorów dla wybranego wieku.": "No installers match the selected age.",
+        "Dane kompilacji projektów (DerivedData)": "Project build data (DerivedData)",
+        "Archiwa wydań (.xcarchive)": "Release archives (.xcarchive)",
+        "Zainstalowana wersja: %@": "Installed version: %@",
+        "Tylko podgląd: dane są świeże lub nie udało się potwierdzić, że można je usunąć.": "View only: the data changed recently or could not be verified for removal.",
+        "Pokaż w Finderze: %@": "Show in Finder: %@",
+        "Przenieś do Kosza: %@": "Move to Trash: %@",
+        "Zakończ oczekującą instalację przed przeniesieniem pliku do Kosza.": "Finish the pending installation before moving this item to the Trash.",
+        "Nie udało się przenieść pozycji do Kosza. Sprawdź aktualny wynik skanu.": "Couldn’t move the item to the Trash. Review the updated scan.",
+        "Nie udało się odczytać plików. Sprawdź dostęp do folderu i ponów skan.": "Couldn’t read the files. Check folder access and scan again.",
+    ]
+}

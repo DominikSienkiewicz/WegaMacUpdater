@@ -21,18 +21,31 @@ struct CleanupView: View {
     @State private var exportError: String?
     @State private var copiedCommand: String?
     @State private var search = ""
+    private var page: CleanupPage { store.filePage }
     @FocusState private var searchFocused: Bool
 
     private var isIdle: Bool { store.phase == .idle }
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-                .padding(.horizontal, 16)
-                .padding(.top, 16)
-                .padding(.bottom, 10)
-            messages
-            content
+            Picker(tr("Porządki"), selection: $store.filePage) {
+                ForEach(CleanupPage.allCases, id: \.self) { page in Text(page.title).tag(page) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding([.top, .horizontal], 16)
+            .disabled(!isIdle)
+            if page == .tools {
+                header
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                    .padding(.bottom, 10)
+                messages
+                content
+            } else {
+                CleanupFileReviewView(page: page, search: search, store: page == .installers ? store.installerReview : store.xcodeReview)
+                    .id(page)
+            }
         }
         .alert(tr("Odczytać PATH z powłoki?"), isPresented: $showsPathWarning) {
             Button(tr("Odczytaj PATH")) { store.readPath() }
@@ -46,7 +59,8 @@ struct CleanupView: View {
         .wegaAttention(confirming != nil || showsPathWarning || !errorMessages.isEmpty)
         .onChange(of: store.phase) { old, new in announce(from: old, to: new) }
         .onAppear { store.applyTCCMapSetting() }
-        .searchable(text: $search, prompt: tr("Szukaj narzędzia lub ścieżki…"))
+        .onChange(of: page) { search = "" }
+        .searchable(text: $search, prompt: page == .tools ? tr("Szukaj narzędzia lub ścieżki…") : tr("Szukaj pliku lub projektu…"))
         .searchFocused($searchFocused)
         .receivesSearchFocusRequests(on: .cleanup) { searchFocused = true }
     }
