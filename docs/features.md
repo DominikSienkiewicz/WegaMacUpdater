@@ -715,7 +715,8 @@ The confirmation sheet shows what will happen to each app that does not go throu
 ### Cleanup
 
 **Old installers** and **Xcode cleanup** run on request. The installer picker grants
-access to the chosen folder for a shallow scan. The Xcode view separates per-project
+access to the chosen folder for a shallow scan. The folder summary totals the installers
+matching the age filter. Each file expands to show its Finder and Trash actions. The Xcode view separates per-project
 DerivedData from release archives. Both views support search and sorting, and keep
 their results in memory. The saved Tools report and its exports contain the Tools scan.
 
