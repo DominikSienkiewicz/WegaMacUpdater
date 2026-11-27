@@ -201,13 +201,21 @@ struct UninstallResultPresentationTests {
         #expect(plain.failedZapIDs.isEmpty)
     }
 
-    @Test func failedBrewZapKeepsItsForceNote() throws {
-        let cask = app("Cask", brew: true)
-        let zapped = UninstallResultPresentation.report(
-            results: [cask.id: .failed("zap failed")], apps: [cask],
-            failedZapIDs: [cask.id]
-        )
-        #expect(try #require(zapped.summary).contains("--force"))
+    @Test func failedBrewZapIsReportedAsIncompleteWithItsForceNote() throws {
+        let cask = app("Cask", brew: true), running = app("Running")
+        let zapped = withLanguage(.pl) {
+            UninstallResultPresentation.report(
+                results: [cask.id: .failed("zap failed"), running.id: .skippedStillRunning],
+                apps: [cask, running], failedZapIDs: [cask.id]
+            )
+        }
+        #expect(zapped.banner == nil)
+        #expect(zapped.rows.map(\.id) == [cask.id, running.id])
+        #expect(zapped.rows.first?.reason == "zap failed")
+        let summary = try #require(zapped.summary)
+        #expect(summary.contains("Odinstalowanie niepełne — nie usunięto: \(cask.name)."))
+        #expect(summary.contains("Nie uruchomiono --force"))
+
         let plain = UninstallResultPresentation.report(
             results: [cask.id: .failed("uninstall failed")], apps: [cask]
         )
