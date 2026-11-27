@@ -246,6 +246,7 @@ public enum Plurals {
             few:  "…i %@ wcześniejsze wydania",
             many: "…i %@ wcześniejszych wydań"
         ),
+        "%@ instalatorów": PluralForms(one: "%@ instalator", few: "%@ instalatory", many: "%@ instalatorów"),
         "%@ wyników do przejrzenia": PluralForms(
             one: "%@ wynik do przejrzenia", few: "%@ wyniki do przejrzenia", many: "%@ wyników do przejrzenia"
         ),
@@ -442,6 +443,7 @@ public enum Plurals {
             few:  "…and %@ earlier releases",
             many: "…and %@ earlier releases"
         ),
+        "%@ instalatorów": PluralForms(one: "%@ installer", few: "%@ installers", many: "%@ installers"),
         "%@ wyników do przejrzenia": PluralForms(
             one: "%@ result to review", few: "%@ results to review", many: "%@ results to review"
         ),

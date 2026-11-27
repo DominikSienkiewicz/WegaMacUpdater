@@ -29,7 +29,7 @@ struct CleanupView: View {
 
     var body: some View {
         Group {
-            if page == .tools && store.report == nil {
+            if page == .installers || (page == .tools && store.report == nil) {
                 pages
             } else {
                 pages

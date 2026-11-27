@@ -321,7 +321,8 @@ When the order of two copies is uncertain, Wega can read the shell’s search pa
 confirmation and refresh the report.
 
 Cleanup also offers two on-demand file reviews. **Old installers** finds `.dmg` and `.pkg`
-files in a folder you choose. **Xcode cleanup** lists each project's build data and
+files in a folder you choose. The folder summary shows their count and combined size.
+Expand a file to reveal it in Finder or review a move to the Trash. **Xcode cleanup** lists each project's build data and
 shows release archives separately. Both views display file sizes and modification dates.
 **Simulator runtimes** lists the platforms and versions reported by the selected Xcode
 installation and opens Xcode for component management.

@@ -49,6 +49,13 @@ enum ReviewedCleanupFile: Identifiable, Sendable {
 enum CleanupFileOrder: Hashable {
     case largest, oldest
 
+    func visibleFiles(_ files: [ReviewedCleanupFile], search: String) -> [ReviewedCleanupFile] {
+        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        return files.filter {
+            query.isEmpty || $0.name.localizedStandardContains(query) || $0.id.lastPathComponent.localizedStandardContains(query)
+        }.sorted(by: precedes)
+    }
+
     func precedes(_ left: ReviewedCleanupFile, _ right: ReviewedCleanupFile) -> Bool {
         switch self {
         case .largest where left.bytes != right.bytes: return (left.bytes ?? -1) > (right.bytes ?? -1)

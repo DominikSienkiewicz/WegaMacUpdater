@@ -1225,8 +1225,10 @@ file can be removed.
 **Old installers.** Click **Choose Folder…** and select a folder such as Downloads.
 Wega lists regular `.dmg` and `.pkg` files directly inside it. The default filter shows
 files last modified at least 30 days ago. Choose **All** to include recent downloads.
-Sort by size or modification date, then use the Finder button to inspect a file or
-the Trash button to review and confirm the move. Cloud-only files are skipped. A signed
+The folder header shows the count and combined size for the chosen age. Search by
+filename or sort by size or modification date. Expand a file and choose **Show in Finder**
+to inspect it, or **Move to Trash…** to confirm moving that file. You can restore it
+until you empty the Trash. Cloud-only files are skipped. A signed
 component package can show **Installed version** when its metadata and publisher match
 the installed app, including the build number if the package declares one.
 
